@@ -681,6 +681,27 @@ class Simulation(object):
                 ax.scatter(self.status_quo[run, 0], self.status_quo[run, 1], self.status_quo[run, 2], s = 55, c = '#8c564b', alpha = 1, label = 'Status Quo')
                 ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], self.outcomes[run, 2], s = 50, c = '#ff7f0e', alpha = 1, label = 'Outcome')               
             
+                print(self.Variables.trace)
+                if self.Variables.trace is True:     
+                    line1 = [(self.status_quo[run, 0], self.outcomes[run, 0]),
+                             (self.status_quo[run, 1], self.outcomes[run, 1]),
+                             (self.status_quo[run, 2], self.outcomes[run, 2])]
+                        
+                    if run <= 4:
+                        lines = [[(self.status_quo[run - i - 1, 0], self.status_quo[run - i, 0]),
+                                  (self.status_quo[run - i - 1, 1], self.status_quo[run - i, 1]),
+                                  (self.status_quo[run - i - 1, 2], self.status_quo[run - i, 2])] for i in range(run)]
+                        print(lines)
+                                  
+                    else: 
+                        lines = [[(self.status_quo[run - i - 1, 0], self.status_quo[run - i, 0]),
+                                  (self.status_quo[run - i - 1, 1], self.status_quo[run - i, 1]),
+                                  (self.status_quo[run - i - 1, 2], self.status_quo[run - i, 2])] for i in range(5)]
+                        
+                    ax.plot(*line1, alpha = 1, color = "green")
+                    for i, item in enumerate(lines):
+                        ax.plot(item[0], item[1], item[2], color = "green", alpha = (0.8 - i * .2))
+    
                 box = ax.get_position()
                 
                 ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
