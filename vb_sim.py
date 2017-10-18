@@ -14,7 +14,6 @@ from matplotlib.patches import Circle
 from matplotlib.collections import PatchCollection
 import matplotlib.lines as mlines
 import vb_init as vinit
-#import drawer
 import vb_animation_drawer
 from scipy.spatial import distance as dist
 from pandas import DataFrame
@@ -30,6 +29,9 @@ class Simulation(object):
     def __init__(self):
         #set up variables from var.py / gui 
         self.Variables = vinit.setVars()
+        
+    def __id__(self, x):
+        return x.__array_interface__['data'][0]
 
     def simulation(self):  
         '''
@@ -38,6 +40,8 @@ class Simulation(object):
         are ultimately saved to csv are stored in this function.
         '''
         #initialize arrays
+        start_time = time.time()
+        
         self.voter_position_array = np.zeros((len(self.Variables.voters), self.Variables.runs, self.Variables.number_dimensions))
         self.voter_radius_array = np.zeros((len(self.Variables.voters), self.Variables.runs, 1))
         
@@ -125,6 +129,7 @@ class Simulation(object):
                 #select the points that are in winset of the ith coalition
                 points_in_circle = self.pointsInWinset(random_points, self.voter_position_array[coalition, run], self.voter_position_array[as_index, run], self.status_quo[[run]])
 
+
                 possible_outcome = self.closestToAgendaSetter(points_in_circle, as_index, run)
                 
                 possible_outcomes.append(possible_outcome)
@@ -167,9 +172,9 @@ class Simulation(object):
             self.saveRoleArray()
 
         logging.info("Simulation complete")
+        print("--- %s seconds ---" % (time.time() - start_time))
 #        logging.info('Find results at ' + filename)
         
-    
     def paintGrid(self, start, stop, breaks, break_decimal):
         '''
         Points are added at set intervals to a grid of a given size.
@@ -188,8 +193,7 @@ class Simulation(object):
         except MemoryError:
             logging.error('Memory Error. Could not create grids // Try setting larger breaks')
             raise
-    
-    
+
     def pointsInWinset(self, random_points, coalition, agenda_setter, status_quo):
         '''
         Function to determine which points fall inside the preference circles of both the agenda
@@ -244,8 +248,7 @@ class Simulation(object):
             possible_coalitions = [veto_players]
     
         return possible_coalitions
-
-
+    
     def closestToAgendaSetter(self, points_in_selection, as_index, run):
         '''
         This function determines which point from a given array is closest to the agenda setter. It takes all
@@ -262,20 +265,24 @@ class Simulation(object):
             preferred_point = self.Variables.status_quo
     
         else:
-                # determine the distance of each eligible point to the agenda setter
-                #TODO: This dist calc is double, store values from pointsInWinset and reuse?
-                distance = self.determineDistance(points_in_selection, self.voter_position_array[as_index, run], 
-                                                  self.Variables.distance_type)
-                
-                # retrieve the index of minimum distance and get the actual point value
-                index = np.where(distance == distance.min())
-                
-                # currently, only the first value is used. for games with 0 agenda setter better system needed
-                preferred_point = points_in_selection[index[0][0]]
-                
+            # determine the distance of each eligible point to the agenda setter
+            #TODO: This dist calc is double, store values from pointsInWinset and reuse?
+            distance = self.determineDistance(points_in_selection, self.voter_position_array[as_index, run], 
+                                              self.Variables.distance_type)
+            
+            # retrieve the index of minimum distance and get the actual point value
+            index = np.where(distance == distance.min())
+            print('--')
+            print(self.__id__(points_in_selection))
+
+            # currently, only the first value is used. for games with 0 agenda setter better system needed
+            preferred_point = points_in_selection[index[0][0]]
+            print(self.__id__(preferred_point))
+            print("..")
+            
         return preferred_point
     
-        
+    
     def determineDistance(self, point1, point2, dist_type = 'euclidean'):  
         '''
         This function determines the distance between two points in any number of dimensions.
@@ -287,9 +294,8 @@ class Simulation(object):
             
         if point2.ndim == 1:
             point2 = point2[None, :]
-            
-        distance = dist.cdist(point1, point2, metric = dist_type)
-        return distance
+          
+        return dist.cdist(point1, point2, metric = dist_type)
         
               
     def alterStatusQuo(self, outcome):
@@ -477,7 +483,7 @@ class Simulation(object):
                 
                 ax.legend(scatterpoints = 1, loc = 'upper center', shadow = 'True', bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
                 
-                ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords = 'axes fraction')
+                ax.annotate('Run: ' + str(run+1), xy = (1, 1), xycoords = 'axes fraction')
         
                 filename = ''.join((self.Variables.directory, '/', str(run), '.png'))
                 
@@ -485,7 +491,7 @@ class Simulation(object):
                                 
                 filenames.append(filename)
     
-                plt.close("all")
+                plt.close('all')
                 
     
         elif self.Variables.number_dimensions == 2:
@@ -499,9 +505,18 @@ class Simulation(object):
             
             for run in range(self.Variables.runs):
                 
-                fig = plt.figure(figsize = (18.5, 10.5), dpi = 80)
-                
-                ax = fig.add_subplot(111, aspect='equal')
+                if self.Variables.trace_total_change is True:
+                    fig, (ax, ax1) = plt.subplots(2, 1, gridspec_kw = {'height_ratios':[4, 1]})
+                    fig.set_size_inches(10, 10)
+                    fig.set_dpi(80)
+                    ax1.plot(range(self.Variables.runs), self.total_pyth_distance, c = '#1f77b4')
+                    ax1.scatter(run, self.total_pyth_distance[run], c = '#d62728', s = 40, clip_on = False)
+
+                else:
+                    fig = plt.figure(figsize = (18.5, 10.5), dpi = 80)
+                    
+                    ax = fig.add_subplot(111, aspect='equal')
+                    
                 ax.set_xlim(vis_limits[0, 0], vis_limits[0, 1])
                 ax.set_ylim(vis_limits[1, 0], vis_limits[1, 1])
                 
@@ -513,7 +528,7 @@ class Simulation(object):
                     ax.scatter(
                             self.voter_position_array[index, run, 0], 
                             self.voter_position_array[index, run, 1],
-                            s = 30, c = 'black', label = 'Voters'
+                            s = 30, c = '#7f7f7f', label = 'Voters'
                             )
                     
                     norm_patches = [Circle((xx, yy), rr) for xx, yy, rr in zip(
@@ -521,7 +536,7 @@ class Simulation(object):
                                     self.voter_position_array[index, run, 1],
                                     self.voter_radius_array[index, run])]
                                     
-                    norm_collection = PatchCollection(norm_patches, facecolors = 'grey',
+                    norm_collection = PatchCollection(norm_patches, facecolors = '#7f7f7f',
                                                       edgecolors = 'black', linewidths = 0.5, alpha = 0.2)
                                     
                     ax.add_collection(norm_collection)
@@ -534,14 +549,14 @@ class Simulation(object):
                     
                     ax.scatter(self.voter_position_array[index, run, 0], 
                                self.voter_position_array[index, run, 1],
-                               s = 30, c = 'red', label = 'Veto Players')
+                               s = 30, c = '#d62728', label = 'Veto Players')
                     
                     veto_patches = [Circle((xx, yy), rr) for xx, yy, rr in zip(
                             self.voter_position_array[index, run, 0], 
                             self.voter_position_array[index, run, 1],
                             self.voter_radius_array[index, run])]
 
-                    veto_collection = PatchCollection(veto_patches, facecolors = "red", 
+                    veto_collection = PatchCollection(veto_patches, facecolors = "#d62728", 
                                                       alpha = 0.2, linewidths = 0.5, edgecolors = "black")
                     
                     ax.add_collection(veto_collection)
@@ -552,38 +567,37 @@ class Simulation(object):
                 ax.scatter(
                         self.voter_position_array[index, run, 0],
                         self.voter_position_array[index, run, 1],
-                        s = 30, c = 'lightblue', label = 'Agenda Setter'
+                        s = 30, c = '#1f77b4', label = 'Agenda Setter'
                         )
                 
                 as_patch = Circle((
                         self.voter_position_array[index, run, 0],
                         self.voter_position_array[index, run, 1]),
                         self.voter_radius_array[index, run],
-                        facecolor = 'blue', edgecolor = 'black', linewidth = 0.5, alpha = 0.2
+                        facecolor = '#1f77b4', edgecolor = 'black', linewidth = 0.5, alpha = 0.2
                         )
 
                 ax.add_artist(as_patch)
                 as_patch.set_clip_box(ax.bbox)
                 
-                ax.scatter(self.status_quo[run, 0], self.status_quo[run, 1], s = 35, c = 'orange', label = 'Status Quo')
-                ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s = 30, c = 'yellow', label = 'Outcome')
+                ax.scatter(self.status_quo[run, 0], self.status_quo[run, 1], s = 35, c = '#8c564b', label = 'Status Quo')
+                ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s = 30, c = '#ff7f0e', label = 'Outcome')
                 
                 #trace status quo
                 if self.Variables.trace is True:
-                    
                     lines = [mlines.Line2D([self.status_quo[run, 0], self.outcomes[run, 0]], 
                                            [self.status_quo[run, 1], self.outcomes[run, 1]],
-                                           linewidth = 2, color = "green", alpha = 1)]
+                                           linewidth = 2, color = '#2ca02c', alpha = 1)]
                         
                     if run <= 4:
                         lines += [mlines.Line2D([self.status_quo[run - i - 1, 0], self.status_quo[run - i, 0]],
                                                 [self.status_quo[run - i - 1, 1], self.status_quo[run - i, 1]],
-                                                linewidth = 2, color = "green", alpha = (0.8 - i * .2)) for i in range(run)]
+                                                linewidth = 2, color = '#2ca02c', alpha = (0.8 - i * .2)) for i in range(run)]
                         
                     else: 
                         lines += [mlines.Line2D([self.status_quo[run - i - 1, 0], self.status_quo[run - i, 0]], 
                                                [self.status_quo[run - i - 1, 1], self.status_quo[run - i, 1]],
-                                               linewidth = 2, color = "green", alpha = (0.8 - i * .2)) for i in range(5)]
+                                               linewidth = 2, color = '#2ca02c', alpha = (0.8 - i * .2)) for i in range(5)]
     
                     [ax.add_line(line) for line in lines]
                 
@@ -681,7 +695,6 @@ class Simulation(object):
                 ax.scatter(self.status_quo[run, 0], self.status_quo[run, 1], self.status_quo[run, 2], s = 55, c = '#8c564b', alpha = 1, label = 'Status Quo')
                 ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], self.outcomes[run, 2], s = 50, c = '#ff7f0e', alpha = 1, label = 'Outcome')               
             
-                print(self.Variables.trace)
                 if self.Variables.trace is True:     
                     line1 = [(self.status_quo[run, 0], self.outcomes[run, 0]),
                              (self.status_quo[run, 1], self.outcomes[run, 1]),
@@ -691,16 +704,15 @@ class Simulation(object):
                         lines = [[(self.status_quo[run - i - 1, 0], self.status_quo[run - i, 0]),
                                   (self.status_quo[run - i - 1, 1], self.status_quo[run - i, 1]),
                                   (self.status_quo[run - i - 1, 2], self.status_quo[run - i, 2])] for i in range(run)]
-                        print(lines)
                                   
                     else: 
                         lines = [[(self.status_quo[run - i - 1, 0], self.status_quo[run - i, 0]),
                                   (self.status_quo[run - i - 1, 1], self.status_quo[run - i, 1]),
                                   (self.status_quo[run - i - 1, 2], self.status_quo[run - i, 2])] for i in range(5)]
                         
-                    ax.plot(*line1, alpha = 1, color = "green")
+                    ax.plot(*line1, alpha = 1, color = '#2ca02c')
                     for i, item in enumerate(lines):
-                        ax.plot(item[0], item[1], item[2], color = "green", alpha = (0.8 - i * .2))
+                        ax.plot(item[0], item[1], item[2], color = '#2ca02c', alpha = (0.8 - i * .2))
     
                 box = ax.get_position()
                 
@@ -708,7 +720,7 @@ class Simulation(object):
                 
                 ax.legend(scatterpoints = 1, loc = 'upper center', shadow = 'True', bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
                 
-                ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords='axes fraction')
+                ax.annotate('Run: ' + str(run+1), xy = (1, 1), xycoords = 'axes fraction')
     
                 filename = os.path.join(self.Variables.directory, "run" + str(run) + '.png')
                 
@@ -716,7 +728,7 @@ class Simulation(object):
                     
                 filenames.append(filename)
                 
-                plt.close("all")    
+                plt.close('all')    
                             
         if animate is True:
             import imageio

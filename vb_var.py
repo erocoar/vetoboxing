@@ -52,3 +52,5 @@ custom_role_array = None
 role_array = None
 
 save_sequence = True
+
+trace_total_change = True

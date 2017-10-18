@@ -197,6 +197,7 @@ class Ui_MainWindow(object):
         self.spinBox_runs = QtWidgets.QSpinBox(self.groupBox_Options)
         self.spinBox_runs.setGeometry(QtCore.QRect(10, 120, 62, 22))
         self.spinBox_runs.setProperty("value", 1)
+        self.spinBox_runs.setMaximum(9999)
         self.spinBox_runs.setObjectName("spinBox_runs")
         self.label_alterPrefs = QtWidgets.QLabel(self.groupBox_Options)
         self.label_alterPrefs.setGeometry(QtCore.QRect(200, 0, 101, 16))

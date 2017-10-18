@@ -70,3 +70,5 @@ class setVars(object):
         self.randomize_veto = var.randomize_veto
         
         self.randomize_as = var.randomize_as
+        
+        self.trace_total_change = var.trace_total_change
