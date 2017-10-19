@@ -119,20 +119,32 @@ class Simulation(object):
 
             random_points = self.paintGrid(*grid_index, self.Variables.breaks, break_decimal)
             
+            #exclude points that are outside of agenda setter & veto player winsets
+            random_points = self.pointsInWinset(random_points, self.status_quo[[run]], self.voter_position_array[as_index, run])
+            random_points = self.pointsInWinset(random_points, self.status_quo[[run]], self.voter_position_array[veto_index, run])
+            
             #determine possible coalitions that can form a majority - must include veto players and as
             possible_coalitions = self.determineCoalitions(as_index, veto_index, normal_index)
-
+            print("as index", as_index)
+            print("veto index", veto_index)
+            print("normal index", normal_index)
+            print("coal done")
+            print(possible_coalitions)
             possible_outcomes = []
             
             #determine the possible outcomes of all coalitions
-            for coalition in possible_coalitions:
-                #select the points that are in winset of the ith coalition
-                points_in_circle = self.pointsInWinset(random_points, self.voter_position_array[coalition, run], self.voter_position_array[as_index, run], self.status_quo[[run]])
-
-
-                possible_outcome = self.closestToAgendaSetter(points_in_circle, as_index, run)
-                
-                possible_outcomes.append(possible_outcome)
+            if possible_coalitions:
+                for coalition in possible_coalitions:
+                    #select the points that are in winset of the ith coalition
+                    points_in_circle = self.pointsInWinset(random_points, self.status_quo[[run]],
+                                                           np.vstack([self.voter_position_array[coalition, run]]))
+    
+                    possible_outcome = self.closestToAgendaSetter(points_in_circle, as_index, run)
+                    
+                    possible_outcomes.append(possible_outcome)
+                    
+            else:              
+                possible_outcomes.append(self.closestToAgendaSetter(random_points, as_index, run))
                 
             if len(possible_outcomes) > 1:
                 possible_outcomes = np.vstack([item for item in possible_outcomes])
@@ -157,7 +169,7 @@ class Simulation(object):
 
             # set the players' new preferences
             self.alterPlayerPreferences()  
-
+        print("--- %s seconds ---" % (time.time() - start_time))
         if self.Variables.visualize == True:
             logging.info('Visualizing results')
                                     
@@ -172,7 +184,7 @@ class Simulation(object):
             self.saveRoleArray()
 
         logging.info("Simulation complete")
-        print("--- %s seconds ---" % (time.time() - start_time))
+        
 #        logging.info('Find results at ' + filename)
         
     def paintGrid(self, start, stop, breaks, break_decimal):
@@ -194,33 +206,22 @@ class Simulation(object):
             logging.error('Memory Error. Could not create grids // Try setting larger breaks')
             raise
 
-    def pointsInWinset(self, random_points, coalition, agenda_setter, status_quo):
+    def pointsInWinset(self, random_points, status_quo, player):
         '''
-        Function to determine which points fall inside the preference circles of both the agenda
-        setter and all veto players, as well as possible additional players required to get to
-        a majority. Thus, a first selection of eligible points is made: the 'winner'
-        must be in this set; otherwise it is the status quo.
+        Function to determine which points fall inside preference circles of specified players.
         This function is first used to determine the optimum within each coalition, and then
         to determine the final outcome: the optimal point across all coalitions.
         '''
         logging.info('Calculating points in winset')
         
-        voter_pos = np.vstack([coalition])
+        radius = self.determineDistance(player, status_quo, self.Variables.distance_type).T
         
-        as_radius = self.determineDistance(agenda_setter, status_quo, self.Variables.distance_type)
-        voter_radius = self.determineDistance(status_quo, voter_pos, self.Variables.distance_type)
- 
-        distance_point_as = self.determineDistance(random_points, agenda_setter, self.Variables.distance_type)
-        index = np.where(distance_point_as <= as_radius)[0]
-        
-        distance_point_voter = self.determineDistance(random_points[index], voter_pos, self.Variables.distance_type)
-        selection = np.greater_equal(voter_radius, distance_point_voter)
-        selection_index = np.where(np.all(selection, axis = 1))[0]
-        
-        selected_points = random_points[index[selection_index]]
+        distance = self.determineDistance(random_points, player, self.Variables.distance_type)
 
-        return selected_points
+        index = np.where(np.all(np.greater_equal(radius, distance), axis = 1))[0]
         
+        return random_points[index]
+                
     
     def determineCoalitions(self, agenda_setter, veto_players, normal_voters):
         '''
@@ -233,19 +234,26 @@ class Simulation(object):
         
         # required voters: agenda setter and veto players
         required_voters = agenda_setter + veto_players
-    
+        print("voters-----------------")
+        print(self.Variables.voters)
         # check if veto players and the agenda setter are a majority by themselves
-        if len(required_voters) < 0.5 * len(self.Variables.voters):
-    
+        if len(required_voters) <= 0.5 * len(self.Variables.voters):
+            print("coal need")
             #determine how many more voters are needed
-            more_voters = int(ceil(0.5 * len(self.Variables.voters) - len(required_voters)))
+            more_voters = ceil(0.5 * len(self.Variables.voters) + 1) - len(self.Variables.voters)%2 - len(required_voters)
+#            more_voters = ceil(abs(0.5 * len(self.Variables.voters) - len(required_voters) - 1))
             
+            if more_voters == 0:
+                more_voters == 1
+            print("more voters", more_voters)
             # the combinations of voters that can be added to the required voters to get a coalition
-            possible_coalitions = [list(coalition) + veto_players for coalition in itertools.combinations(normal_voters, more_voters)]           
-    
+#            possible_coalitions = [list(coalition) + veto_players for coalition in itertools.combinations(normal_voters, more_voters)]           
+            possible_coalitions = [list(coalition) for coalition in itertools.combinations(normal_voters, more_voters)]           
+            print(possible_coalitions)
+            print("----------------------------")
         # if VPs and agenda setter are already a majority, they are the only coalition
         else:
-            possible_coalitions = [veto_players]
+            possible_coalitions = []
     
         return possible_coalitions
     
@@ -272,13 +280,9 @@ class Simulation(object):
             
             # retrieve the index of minimum distance and get the actual point value
             index = np.where(distance == distance.min())
-            print('--')
-            print(self.__id__(points_in_selection))
 
             # currently, only the first value is used. for games with 0 agenda setter better system needed
             preferred_point = points_in_selection[index[0][0]]
-            print(self.__id__(preferred_point))
-            print("..")
             
         return preferred_point
     
@@ -499,10 +503,10 @@ class Simulation(object):
             for dim in range(self.Variables.number_dimensions):
                 
                 vis_limits[dim] = (
-                        (self.voter_position_array - self.voter_radius_array)[:, :, dim].min(),
-                        (self.voter_position_array + self.voter_radius_array)[:, :, dim].max()
+                        (self.voter_position_array - self.voter_radius_array).min(),
+                        (self.voter_position_array + self.voter_radius_array).max()
                         )
-            
+                            
             for run in range(self.Variables.runs):
                 
                 if self.Variables.trace_total_change is True:
@@ -744,8 +748,8 @@ class Simulation(object):
                 ['Voter ' + str(i + 1) + '-' + voter.name + '-ROLE'] + 
                 ['Voter ' + str(i + 1) + '-' + voter.name + '-DIM-' + str(dim + 1) for dim in range(self.Variables.number_dimensions)] +
                 ['Voter ' + str(i + 1) + '-' + voter.name + '-RADIUS'] for i, voter in enumerate(self.Variables.voters)] for y in x] +\
-                ['Status Quo' + '-dim ' + str(dim + 1) for dim in range(self.Variables.number_dimensions)]+\
-                ['Outcome' + '-dim ' + str(dim + 1) for dim in range(self.Variables.number_dimensions)]+\
+                ['Status Quo' + '-DIM ' + str(dim + 1) for dim in range(self.Variables.number_dimensions)]+\
+                ['Outcome' + '-DIM ' + str(dim + 1) for dim in range(self.Variables.number_dimensions)]+\
                 ['Total Euclidean Distance', 'Total Manhattan Distance']+\
                 ['Distance' + '-dim ' + str(dim + 1) for dim in range(self.Variables.number_dimensions)]+\
                 ['Number Veto Players', 'Number Normal Voters']
