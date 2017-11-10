@@ -49,6 +49,16 @@ The game widget is where you can manage and set up simulations (games). Each tab
  
  The game widget toolbar is for ease of setting up games. 
  
- 1. ![](https://puu.sh/yjbkI/544e2ff0f8.png) **Add and Clear**
+1. ![](https://puu.sh/yjbkI/544e2ff0f8.png) **Add and Clear**
+   A click on the add button will add a row (a voter) to the simulation
+   A click on the clear button will remove the last row (voter) from the simulation
+   Alternatively, rows can be inserted / removed in specified locations via right click
+    
+2. ![](https://puu.sh/yjbpY/71b2ae502b.png) **Set up Voter Roles**
+   Changing the value in the spin box will change the number of veto players that will be added
+   Adding Agenda Setter (AS) and Veto Players (VP) can be toggled on and off. Green background = Toggled on
+   A click on the shuffle button will randomly assign the agenda setter role and the specified number of veto player roles
+   
+   
  
 
