@@ -9,7 +9,7 @@
 
 2. Save Options and Voters
 
- Current Options and voter setup can be saved in specified folder
+ ⋅⋅⋅Current Options and voter setup can be saved in specified folder
 
 3. Run Game
 
