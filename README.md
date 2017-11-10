@@ -5,7 +5,7 @@
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/mainToolbar.png)
 1. Load Options and Voters
 
- Preset settings and voter values can be loaded from a .json file
+   Preset settings and voter values can be loaded from a .json file
 
 2. Save Options and Voters
 
