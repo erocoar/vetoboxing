@@ -12,7 +12,8 @@ import time
 import numpy as np
 import random
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationToolbar
 from PyQt5 import QtCore, QtWidgets, QtGui
 
 _DOCK_OPTS = QtWidgets.QMainWindow.AnimatedDocks | QtWidgets.QMainWindow.AllowNestedDocks | QtWidgets.QMainWindow.AllowTabbedDocks
@@ -86,8 +87,11 @@ class MainWindow(QtWidgets.QMainWindow):
         settingsAction = QtWidgets.QAction(QtGui.QIcon("./assets/iconSettings.png"), "Settings", self)
         settingsAction.triggered.connect(self.showPreferences)
         
-        manifestoAction = QtWidgets.QAction(QtGui.QIcon("./assets/iconManifesto.png"), "Manifesto", self)
+        manifestoAction = QtWidgets.QAction(QtGui.QIcon("./assets/iconManifesto.png"), "Manifesto Window", self)
         manifestoAction.triggered.connect(self.showManifesto)
+        
+        plotAction = QtWidgets.QAction(QtGui.QIcon("./assets/iconPlot.png"), "Plot Window", self)
+        plotAction.triggered.connect(self.showPlot)
         
         clearAction = QtWidgets.QAction(QtGui.QIcon("./assets/iconClear.png"), "Clear All", self)
         clearAction.setShortcut("Ctrl+C")
@@ -103,7 +107,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.toolbar_runSim.addActions([runAction, runAllAction, runLastAction])
         
-        self.toolbar_dockWindows.addActions([settingsAction, manifestoAction])
+        self.toolbar_dockWindows.addActions([settingsAction, manifestoAction, plotAction])
         
         self.toolbar_clear.addAction(clearAction)
         
@@ -155,10 +159,12 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.manifestoDock.isVisible():
             return
         
-        if not self.manifestoDock.isWindow():
-            self.manifestoDock.setFloating(True)
-            
         self.manifestoDock.show()
+    
+    def showPlot(self):
+        if self.visualizeDock.isVisible():
+            return
+        self.visualizeDock.show()
     
     def __setupMenu__(self):
         """
@@ -194,9 +200,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.logDock.setWindowTitle("Log")
         self.logDock.setWidget(self.logWidget)
         self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.logDock)
-        self.logWidget.append("test")
+        self.logWidget.append("Init")
         
         self.visualizeWidget = VisualizeDockWidget(self)
+#        self.visualizeWidget = VisualizeCanvas(self)
         self.visualizeDock = QtWidgets.QDockWidget()
         self.visualizeDock.setWindowTitle("Plots")
         self.visualizeDock.setWidget(self.visualizeWidget)
@@ -289,12 +296,40 @@ class MainWindow(QtWidgets.QMainWindow):
         
     def runSimulation(self):
         var = self.readValues()
+        print(var.runs)
         
-        import vb_sim_v2 as vb
+        import simulation as vb
         
         sim = vb.Simulation(var, self)
         sim.simulation()
         
+        if var.visualize == "yes":
+            self.index = 0
+            self.visualizeWidget.pushButton_next.clicked.connect(lambda: visualizePlotIndexer("next"))
+            self.visualizeWidget.pushButton_prev.clicked.connect(lambda: visualizePlotIndexer( "prev"))
+
+            """Init draw (draw first run)"""
+            sim.visualizeInit()
+            sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, 0, sim.visLimits, fromUI = True)
+            self.visualizeWidget.canvas.draw()
+            
+        def visualizePlotIndexer(direction):
+            if direction == "next":
+                if self.index == var.runs - 1:
+                    return
+                else:
+                    sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index + 1, sim.visLimits, fromUI = True)
+                    self.visualizeWidget.canvas.draw()
+                    self.index += 1
+                    
+            elif direction == "prev":
+                if self.index == 0:
+                    return
+                else:
+                    sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index - 1, sim.visLimits, fromUI = True)
+                    self.visualizeWidget.canvas.draw()
+                    self.index -= 1 
+            
     def readValues(self):
         """
         Convert tables to arrays and transfer arrays + settings to 
@@ -761,40 +796,51 @@ class OptionsWidget(QtWidgets.QWidget):
         self.__layout__()
 
     def __setup__(self):
-        self.listWidget_selection = QtWidgets.QListWidget()
-        self.listWidget_selection.addItems(["General", "Run", "Visualization", "Advanced"])
-        #TODO set current index here
-
+#        self.listWidget_selection = QtWidgets.QListWidget()
+#        self.listWidget_selection.addItems(["General", "Run", "Visualization", "Advanced"])
         self.generalOptions = GeneralOptions()
         self.runOptions = RunOptions()
         self.visualizationOptions = VisualizeOptions()
-        self.advancedOptions = AdvancedOptions()
+        
+        self.tabWidget = QtWidgets.QTabWidget()
+        self.tabWidget.addTab(self.generalOptions, "General")
+        self.tabWidget.addTab(self.runOptions, "Run")
+        self.tabWidget.addTab(self.visualizationOptions, "Visualization")
+        
+#        self.tabWidget.setTabPosition(1)
 
-        self.optionsIndex = [self.generalOptions, self.runOptions, self.visualizationOptions, self.advancedOptions]
+        self.tabWidget.setTabPosition(0)
+#        self.advancedOptions = AdvancedOptions()
 
-        self.listWidget_selection.currentItemChanged.connect(self.__setIndex__)
+#        self.optionsIndex = [self.generalOptions, self.runOptions, self.visualizationOptions, self.advancedOptions]
+
+#        self.listWidget_selection.currentItemChanged.connect(self.__setIndex__)
 
     def __layout__(self):
-        hbox = QtWidgets.QHBoxLayout()
+        layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.tabWidget)
+        self.setLayout(layout)
+#        hbox = QtWidgets.QHBoxLayout()
+#        
+#        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
+#        splitter.addWidget(self.listWidget_selection)
+#        
+#        splitter.addWidget(self.generalOptions)
+#        splitter.addWidget(self.runOptions)
+#        splitter.addWidget(self.visualizationOptions)
+#        splitter.addWidget(self.advancedOptions)
+#        
+#        self.generalOptions.hide()
+#        self.visualizationOptions.hide()
+#        self.advancedOptions.hide()
+#        self.runOptions.hide()
         
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-        splitter.addWidget(self.listWidget_selection)
+#        splitter.setStretchFactor(0, 1)
+#        splitter.setStretchFactor(1, 1)
         
-        splitter.addWidget(self.generalOptions)
-        splitter.addWidget(self.runOptions)
-        splitter.addWidget(self.visualizationOptions)
-        splitter.addWidget(self.advancedOptions)
-        
-        self.generalOptions.hide()
-        self.visualizationOptions.hide()
-        self.advancedOptions.hide()
-        self.runOptions.hide()
-        
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 1)
-        
-        hbox.addWidget(splitter)
-        self.setLayout(hbox)
+#        hbox.addWidget(splitter)
+#        self.setLayout(hbox)
+        pass
         
     def __setIndex__(self, current, previous):
         """
@@ -1661,57 +1707,59 @@ class AdvancedOptions(QtWidgets.QWidget):
         layout.addWidget(self.spin)
         self.setLayout(layout)
         
-
-class StatusDockWidget(QtWidgets.QWidget):
+        
+class VisualizeCanvas(FigureCanvas):
     """
-    Tab Widget for Log and Environment
+    Backend Canvas (see https://matplotlib.org/examples/user_interfaces/embedding_in_qt4.html)
     """
-    def __init__(self, parent):
-        super(StatusDockWidget, self).__init__(parent)
-        self.__setup__()
-        self.__layout__()
+    def __init__(self, parent=None, width=5.4, height=4, dpi=100):
+        fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = fig.add_subplot(111, aspect = "equal")
         
-    def __setup__(self):
-        self.tabWidget = QtWidgets.QTabWidget()
+        fig.set_facecolor("none")
+#        self.axes.set_axis_bgcolor("none")
         
-        logTab = QtWidgets.QTextEdit()
-        environmentTab = QtWidgets.QTableWidget()
+        FigureCanvas.__init__(self, fig)
+        self.setParent(parent)
         
-        self.tabWidget.addTab(logTab, "A")
-        self.tabWidget.addTab(environmentTab, "B")
+        FigureCanvas.setSizePolicy(self, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
+        FigureCanvas.updateGeometry(self)
         
-    def __layout__(self):
-        pass
-    
-            
-class plotViewDockWidget(QtWidgets.QWidget):
+        
+class VisualizeDockWidget(QtWidgets.QWidget):
     """
     Matplotlib Viewer for Image Output
     """
-    def __init__(self, parent):
-        super(plotViewDockWidget, self).__init__(parent)
+    def __init__(self, parent = None):
+        super(VisualizeDockWidget, self).__init__(parent)
         self.__setup__()
         self.__layout__()
         
-
-        
     def __setup__(self):
-        pass
-    
-    def __layout__(self):
-        pass
-    
-
-class VisualizeDockWidget(QtWidgets.QWidget):
-    def __init__(self, parent):
-        super(VisualizeDockWidget, self).__init__(parent)
+        self.canvas = VisualizeCanvas()
+                
+        self.pushButton_next = QtWidgets.QPushButton()
+        self.pushButton_next.setIcon(QtGui.QIcon("./assets/iconArrowRight.png"))
         
-    def __initFigure__(self, figure):
-        self.canvas = FigureCanvas(figure)
+        self.pushButton_prev = QtWidgets.QPushButton()
+        self.pushButton_prev.setIcon(QtGui.QIcon("./assets/iconArrowLeft.png"))
+        
+        self.toolbar = NavigationToolbar(self.canvas, self)
         
     def __layout__(self):
         layout = QtWidgets.QVBoxLayout()
+        
+        layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
+        
+        button_hbox = QtWidgets.QHBoxLayout()
+        button_hbox.addStretch(1)
+        button_hbox.addWidget(self.pushButton_prev)
+        button_hbox.addWidget(self.pushButton_next)
+        button_hbox.addStretch(1)
+        
+        layout.addLayout(button_hbox)
+        
         self.setLayout(layout)
         
     
