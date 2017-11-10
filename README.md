@@ -1,6 +1,15 @@
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/assets/vetoboxingLogo%20-%20Kopie.png)
+## Dependencies
+[Shapely](https://anaconda.org/conda-forge/shapely)
 
-## Usage
+scipy, pandas, numpy, matplotlib that are included in anaconda
+
+## Run Vetoboxing
+```
+python vetoboxing.py
+```
+
+## Interface
 ### Main Toolbar
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/mainToolbar.png)
 
@@ -21,6 +30,7 @@
    **Run Repeatedly** the currently selected game (a specified number of times) (currently not connected)
    
 3. ![](https://puu.sh/yjbOM/3afea006f6.png) **Open Settings, Manifesto, Plot**
+
    Opens specified window if not visible
    
    **Settings**
@@ -30,6 +40,7 @@
    **Plot**
    
 4. ![](https://puu.sh/yjbQl/9a0ba04cc6.png) **Clear**
+
    Clears all open games (currently not connected)
    
 ### Game Widget
