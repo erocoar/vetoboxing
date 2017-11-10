@@ -33,7 +33,7 @@ python vetoboxing.py
 
    Opens specified window if not visible
    
-   **Settings**
+   [**Settings**](https://github.com/erocoar/vetoboxing/blob/master/README.md#run)
    
    **Manifesto**
    
