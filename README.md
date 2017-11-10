@@ -3,40 +3,24 @@
 ## Usage
 ### Main Toolbar
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/mainToolbar.png)
-1. **Load Options and Voters**
 
-   Preset settings and voter values can be loaded from a .json file
-
-2. **Save Options and Voters**
-
-   Current Options and voter setup can be saved in specified folder
-
-3. **Run Game**
-
-   Runs the currently selected game
-
-4. **Run All Games**
-
-   Run all games in the UI
-   Currently **NOT** connected
-
-5. **Run Repeatedly**
-
-   Repeatedly run current game (a specified number of times)
-   Currently **NOT** connected
-
-6. **Show Settings**
-   Opens the settings window, where you can access general options, run options and visualization options. 
-
-7. **Show Manifesto Widget**
-   Opens Manifesto Widget (if not visible) where you can connect to Manifesto Project 
-
-8. **Show Plot**
-   Show Plot Window (if not visible)
-
-9. **Clear all games**
-   Clear all games from game widget
-   currently **not** connected
+1. ![](https://puu.sh/yjbzh/8f3dd7a70a.png) **Load, Save, Save All**
+   **Load** preset settings and voter values from a .json file
+   **Save** current options and voter values in specified folder in a .json file
+   **Save All** options and voter games in specified folder (currently not connected)
+2. ![](https://puu.sh/yjbEH/f012e42bf0.png) **Run, Run All, Run Repeatedly**
+   **Run** the currently selected game
+   **Run All** games that are open
+   **Run Repeatedly** the currently selected game (a specified number of times) (currently not connected)
+   
+3. ![](https://puu.sh/yjbOM/3afea006f6.png) **Open Settings, Manifesto, Plot**
+   Opens specified window if not visible
+   **Settings**
+   **Manifesto**
+   **Plot**
+   
+4. ![](https://puu.sh/yjbQl/9a0ba04cc6.png) **Clear**
+   Clears all open games (currently not connected)
    
 ### Game Widget
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/gameTable.png)
@@ -59,6 +43,29 @@ The game widget is where you can manage and set up simulations (games). Each tab
    Adding Agenda Setter (AS) and Veto Players (VP) can be toggled on and off. Green background = Toggled on
    A click on the shuffle button will randomly assign the agenda setter role and the specified number of veto player roles
    
+### Settings 
+#### General
+(currently not connected)
+#### Run
+![](https://puu.sh/yjbRD/c4ee03efb3.png)
+Run settings are specific to each game (that is, each tab).
+**Runs** specifies the number of times the simulation will run
+**Dimensions** specifies the number of dimensions the game will be evaluated on
+**Breaks** specifies the density of the grid on which the game is evaluated - this is only necessary if the grid method is selected
+**Method** Grid: Evaluate the game on a grid of points. Optimization: Evaluate via circle intersections and interpolation. Optimization can only be chosen for 1D and 2D.
+**Save** If yes, a CSV with data of all runs will be created
+**Visualize** If yes, data will be visualized and displayed in the plot widget. Note: Currently, there is no option to not save plots and only display them in UI. They will be saved first.
+**Alter Preferences** Drift: Voter positions drift a specified (or random) amount every run. No: Voter positions are fixed.
+**Alter Status Quo** History + Drift: Status Quo is evaluated on history (the outcome of a voting game becomes the new status quo) and drift (specified or random). History: The outcome of a run becomes the new status quo. Random: The status quo changes randomly every run. No: Status Quo is constant. 
+**Distance Type** Euclidean or City-Block
+**Distribution** The distribution drawn from if there is random drift
+#### Visualization
+(currently not connected)
+
+
+
+
+
    
  
 
