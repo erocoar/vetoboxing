@@ -5,9 +5,13 @@
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/mainToolbar.png)
 
 1. ![](https://puu.sh/yjbzh/8f3dd7a70a.png) **Load, Save, Save All**
+
    **Load** preset settings and voter values from a .json file
+   
    **Save** current options and voter values in specified folder in a .json file
+   
    **Save All** options and voter games in specified folder (currently not connected)
+   
 2. ![](https://puu.sh/yjbEH/f012e42bf0.png) **Run, Run All, Run Repeatedly**
 
    **Run** the currently selected game
@@ -18,8 +22,11 @@
    
 3. ![](https://puu.sh/yjbOM/3afea006f6.png) **Open Settings, Manifesto, Plot**
    Opens specified window if not visible
+   
    **Settings**
+   
    **Manifesto**
+   
    **Plot**
    
 4. ![](https://puu.sh/yjbQl/9a0ba04cc6.png) **Clear**
