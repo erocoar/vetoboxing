@@ -9,8 +9,11 @@
    **Save** current options and voter values in specified folder in a .json file
    **Save All** options and voter games in specified folder (currently not connected)
 2. ![](https://puu.sh/yjbEH/f012e42bf0.png) **Run, Run All, Run Repeatedly**
+
    **Run** the currently selected game
+   
    **Run All** games that are open
+   
    **Run Repeatedly** the currently selected game (a specified number of times) (currently not connected)
    
 3. ![](https://puu.sh/yjbOM/3afea006f6.png) **Open Settings, Manifesto, Plot**
