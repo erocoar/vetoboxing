@@ -1,38 +1,54 @@
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/assets/vetoboxingLogo%20-%20Kopie.png)
 
-# Usage
-## Main Toolbar
+## Usage
+### Main Toolbar
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/mainToolbar.png)
-1. Load Options and Voters
+1. **Load Options and Voters**
 
    Preset settings and voter values can be loaded from a .json file
 
-2. Save Options and Voters
+2. **Save Options and Voters**
 
- ⋅⋅⋅Current Options and voter setup can be saved in specified folder
+   Current Options and voter setup can be saved in specified folder
 
-3. Run Game
+3. **Run Game**
 
- Runs the currently selected game
+   Runs the currently selected game
 
-4. Run All Games
+4. **Run All Games**
 
- - Run all games in the UI
- - Currently NOT connected
+   Run all games in the UI
+   Currently **NOT** connected
 
-5. Run Repeatedly 
+5. **Run Repeatedly**
 
- - Repeatedly run current game (a specified number of times)
- - Currently NOT connected
+   Repeatedly run current game (a specified number of times)
+   Currently **NOT** connected
 
-6. Show Settings
-- Opens the settings window, where you can access general options, run options and visualization options. 
+6. **Show Settings**
+   Opens the settings window, where you can access general options, run options and visualization options. 
 
-7. Show Manifesto Widget
-- Opens Manifesto Widget (if not visible) where you can connect to Manifesto Project 
+7. **Show Manifesto Widget**
+   Opens Manifesto Widget (if not visible) where you can connect to Manifesto Project 
 
-8. Show Plot
-- Show Plot Window (if not visible)
+8. **Show Plot**
+   Show Plot Window (if not visible)
 
-9. Clear all games
+9. **Clear all games**
+   Clear all games from game widget
+   currently **not** connected
+   
+### Game Widget
+![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/gameTable.png)
+
+The game widget is where you can manage and set up simulations (games). Each tab here represents a game **with its own distinct run options** (this means, when switching tabs, the run options will change to the now selected game's options - also in the settings). 
+   The first table represents the voters. Names and starting positions per dimension can be filled in. Agenda setter and veto player roles can be assigned by entering True or False (alternatively, 1 or 0) for every voter. Note that the agenda setter role can only be assigned once, but has to be assigned.
+ 
+ ### Game Widget Toolbar
+ ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/gameTableToolbar.png)
+ 
+ The game widget toolbar is for ease of setting up games. 
+ 
+ 1. ![](https://puu.sh/yjbkI/544e2ff0f8.png) **Add and Clear**
+ 
 
