@@ -95,7 +95,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         clearAction = QtWidgets.QAction(QtGui.QIcon("./assets/iconClear.png"), "Clear All", self)
         clearAction.setShortcut("Ctrl+C")
-        clearAction.triggered.connect(self.readValues)
+        clearAction.triggered.connect(lambda: self.visualizeWidget.adjustAxes(2))
         
         stretcher = QtWidgets.QWidget()
         stretcher.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -209,13 +209,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.visualizeDock.setWidget(self.visualizeWidget)
         self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.visualizeDock)
         
-        
-#        self.animationViewer = AnimationDrawer(r"C:\Users\Frederik\Dropbox\SluggishConstitutionalism\Project5_VetoBoxingProject\vbsim\gui_v2\RESULTS\results-3-2-20__2017-11-08_1204\animation.gif")
-#        self.visualizationDock = QtWidgets.QDockWidget()
-#        self.visualizationDock.setWindowTitle("Plot")
-#        self.visualizationDock.setWidget(self.animationViewer)
-#        self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.visualizationDock)
-
         self.voterWidget = VoterSetup(self, initDim = self.optionsWidget.runOptions.spinBox_dimensions.value())
         self.setCentralWidget(self.voterWidget)
 
@@ -259,6 +252,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.optionsWidget.runOptions.buttonGroup_distribution.buttonToggled.connect(lambda: 
             self.updateGameTableOptions("distribution", self.optionsWidget.runOptions.buttonGroup_distribution.checkedButton().text().lower()))
             
+        self.optionsWidget.runOptions.buttonGroup_saveVisualize.buttonToggled.connect(lambda:
+            self.updateGameTableOptions("savevisualize", self.optionsWidget.runOptions.buttonGroup_saveVisualize.checkedButton().text().lower()))
+            
     def updateGameTableOptions(self, option, value):
         if option == "runs":
             self.voterWidget.tabWidget.currentWidget().options.runs = value
@@ -290,45 +286,65 @@ class MainWindow(QtWidgets.QMainWindow):
         elif option == "distribution":
             self.voterWidget.tabWidget.currentWidget().options.distribution = value
             
+        elif option == "savevisualize":
+            self.voterWidget.tabWidget.currentWidget().options.savevisualize = value
+            
     def __tabWidget_ChangedConnect__(self, index):
         self.voterWidget.__addTab__(index)
         self.optionsWidget.__setRunOptions__(self.voterWidget.tabWidget.currentWidget().options)
         
     def runSimulation(self):
         var = self.readValues()
-        print(var.runs)
+        
+        toUIPlot = False
         
         import simulation as vb
         
         sim = vb.Simulation(var, self)
         sim.simulation()
         
-        if var.visualize == "yes":
+        if var.visualize == "yes" and var.savevisualize == "yes":
+            sim.visualizeInit(save = True)
+            toUIPlot = True
+            
+        elif var.visualize == "no" and var.savevisualize == "yes":
+            sim.visualizeInit(save = True)
+            
+        elif var.visualize == "yes" and var.savevisualize == "no":
+            sim.visualizeInit(save = False)
+            toUIPlot = True
+            
+        if toUIPlot is True:
+            self.visualizeWidget.adjustAxes(var.dimensions)
+            print("UI PLOT TRUE RUN HERE")
+            """Indexing the run plots"""
+            def visualizePlotIndexer(direction):
+                if direction == "next":
+                    if self.index == var.runs - 1:
+                        return
+                    else:
+                        sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index + 1, sim.visLimits, fromUI = True)
+                        self.visualizeWidget.canvas.draw()
+                        self.index += 1
+                        
+                elif direction == "prev":
+                    if self.index == 0:
+                        return
+                    else:
+                        sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index - 1, sim.visLimits, fromUI = True)
+                        self.visualizeWidget.canvas.draw()
+                        self.index -= 1 
+            """"""
             self.index = 0
             self.visualizeWidget.pushButton_next.clicked.connect(lambda: visualizePlotIndexer("next"))
             self.visualizeWidget.pushButton_prev.clicked.connect(lambda: visualizePlotIndexer( "prev"))
+            
 
             """Init draw (draw first run)"""
-            sim.visualizeInit()
             sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, 0, sim.visLimits, fromUI = True)
             self.visualizeWidget.canvas.draw()
             
-        def visualizePlotIndexer(direction):
-            if direction == "next":
-                if self.index == var.runs - 1:
-                    return
-                else:
-                    sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index + 1, sim.visLimits, fromUI = True)
-                    self.visualizeWidget.canvas.draw()
-                    self.index += 1
-                    
-            elif direction == "prev":
-                if self.index == 0:
-                    return
-                else:
-                    sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index - 1, sim.visLimits, fromUI = True)
-                    self.visualizeWidget.canvas.draw()
-                    self.index -= 1 
+
             
     def readValues(self):
         """
@@ -345,6 +361,7 @@ class MainWindow(QtWidgets.QMainWindow):
         breaks = self.voterWidget.tabWidget.currentWidget().options.breaks
         save = self.voterWidget.tabWidget.currentWidget().options.save
         visualize = self.voterWidget.tabWidget.currentWidget().options.visualize
+        savevisualize = self.voterWidget.tabWidget.currentWidget().options.savevisualize
         alterPreferences = self.voterWidget.tabWidget.currentWidget().options.alterPreferences
         alterStatusQuo = self.voterWidget.tabWidget.currentWidget().options.alterStatusQuo
         distanceType = self.voterWidget.tabWidget.currentWidget().options.distanceType
@@ -361,7 +378,7 @@ class MainWindow(QtWidgets.QMainWindow):
             modelNumber = self.setModelNumber(alterStatusQuo, alterPreferences)
             
             if directory is None:
-                parentDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'RESULTS')
+                parentDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "RESULTS")
                 self.createDir(parentDir)
                 resultsDir = self.resultsDir(modelNumber, dimensions, runs, parentDir)
                 directory = resultsDir
@@ -371,30 +388,30 @@ class MainWindow(QtWidgets.QMainWindow):
                                    alterPreferences = alterPreferences, alterStatusQuo = alterStatusQuo, distanceType = distanceType, distribution = distribution,
                                    directory = directory, statusQuoPosition = statusQuoPosition, statusQuoDrift = statusQuoDrift, voterNames = voterNames,
                                    voterRoles = voterRoles, voterPositions = voterPositions, randomAgendaSetter = randomAgendaSetter, 
-                                   randomVetoPlayer = randomVetoPlayer, method = method, customRoleArray = customRoleArray)
+                                   randomVetoPlayer = randomVetoPlayer, method = method, customRoleArray = customRoleArray, savevisualize = savevisualize)
         
         
     def setModelNumber(self, alterStatusQuo, alterPreferences):    
         """
         Set the model number of the simulation for classifying the model in the csv
         """
-        if alterStatusQuo == 'no':
+        if alterStatusQuo == "no":
             return 0
 
-        elif alterStatusQuo == 'random':
+        elif alterStatusQuo == "random":
             return 1
         
-        elif alterStatusQuo == 'history':
+        elif alterStatusQuo == "history":
             return 2
         
-        elif alterStatusQuo == 'history+drift' and alterPreferences == 'no':
+        elif alterStatusQuo == "history+drift" and alterPreferences == "no":
             return 3
         
-        elif alterStatusQuo == 'history + drift' and alterPreferences == 'drift':
+        elif alterStatusQuo == "history + drift" and alterPreferences == "drift":
             return 4
         
         else:
-            return 'NA'
+            return "NA"
         
     def createDir(self, directory):
         """
@@ -412,7 +429,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         timestr = time.strftime("%Y-%m-%d_%H%M")
     
-        foldername = ''.join(('results', '-', str(modelNumber), '-', str(dimensions), '-', str(runs), '__', timestr))
+        foldername = "".join(("results", "-", str(modelNumber), "-", str(dimensions), "-", str(runs), "__", timestr))
 
         resultsDir = os.path.join(os.path.dirname(os.path.realpath(__file__)), parentDir, foldername)
         self.createDir(resultsDir)
@@ -640,7 +657,8 @@ class GameTable(QtWidgets.QWidget):
                         "distribution" : self.options.distribution,
                         "runs" : self.options.runs,
                         "save" : self.options.save,
-                        "visualize" : self.options.visualize
+                        "visualize" : self.options.visualize,
+                        "savevisualize" : self.options.savevisualize
                         }
                 }
         
@@ -787,6 +805,7 @@ class GameTableOptions:
         self.alterStatusQuo = "history+drift"
         self.distanceType = "euclidean"
         self.distribution = "uniform"
+        self.savevisualize = "no"
         
         
 class OptionsWidget(QtWidgets.QWidget):
@@ -917,6 +936,13 @@ class OptionsWidget(QtWidgets.QWidget):
             
         else:
             self.runOptions.radioButton_distributionExponential.setChecked(True)
+            
+        """save visualize"""
+        if GameTableOptions.savevisualize == "yes":
+            self.runOptions.radioButton_saveVisualize_yes.setChecked(True)
+            
+        else:
+            self.runOptions.radioButton_saveVisualize_no.setChecked(True)
 
     def __loadOptions__(self, options):
         """TODO SET RUN OPTIONS IN GAMETABLEWIDGET IN MAIN LOAD FUN"""
@@ -1129,6 +1155,16 @@ class RunOptions(QtWidgets.QWidget):
         self.buttonGroup_visualize.addButton(self.radioButton_visualize_no)
         
         """""""""""
+        Visualize Save
+        """""""""""
+        self.buttonGroup_saveVisualize = QtWidgets.QButtonGroup()
+        self.radioButton_saveVisualize_yes = QtWidgets.QRadioButton("Yes")
+        self.radioButton_saveVisualize_no = QtWidgets.QRadioButton("No")
+        self.radioButton_saveVisualize_yes.setChecked(True)
+        self.buttonGroup_saveVisualize.addButton(self.radioButton_saveVisualize_yes)
+        self.buttonGroup_saveVisualize.addButton(self.radioButton_saveVisualize_no)
+        
+        """""""""""
         Save
         """""""""""
         self.buttonGroup_save = QtWidgets.QButtonGroup()
@@ -1214,7 +1250,9 @@ class RunOptions(QtWidgets.QWidget):
         
         layout.addWidget(groupBox_general)
         
-        """Method"""
+        """""""""""
+        Method
+        """""""""""
         groupBox_method = QtWidgets.QGroupBox("Method")
         
         method_hbox = QtWidgets.QHBoxLayout()
@@ -1253,6 +1291,20 @@ class RunOptions(QtWidgets.QWidget):
         groupBox_visualize.setLayout(visualization_hbox)
         
         layout.addWidget(groupBox_visualize)
+        
+        """""""""""
+        Save Visualize
+        """""""""""
+        groupBox_saveVisualize = QtWidgets.QGroupBox("Save Plots")
+        
+        saveVisualize_hbox = QtWidgets.QHBoxLayout()
+        
+        for widget in [self.radioButton_saveVisualize_yes, self.radioButton_saveVisualize_no]:
+            saveVisualize_hbox.addWidget(widget)
+            
+        groupBox_saveVisualize.setLayout(saveVisualize_hbox)
+        
+        layout.addWidget(groupBox_saveVisualize)
         
         """""""""""
         Alter Preferences
@@ -1712,20 +1764,22 @@ class VisualizeCanvas(FigureCanvas):
     """
     Backend Canvas (see https://matplotlib.org/examples/user_interfaces/embedding_in_qt4.html)
     """
-    def __init__(self, parent=None, width=5.4, height=4, dpi=100):
-        fig = Figure(figsize=(width, height), dpi=dpi)
-        self.axes = fig.add_subplot(111, aspect = "equal")
+    def __init__(self, parent = None, width = 5.4, height = 4, dpi = 100, dimensions = 2):
+        if dimensions == 1 or dimensions == 2:
+            self.fig = Figure(figsize = (width, height), dpi = dpi)
         
-        fig.set_facecolor("none")
-#        self.axes.set_axis_bgcolor("none")
+            self.axes = self.fig.add_subplot(111, aspect = "equal", position=[0.15, 0.15, 0.75, 0.75])
+
+        self.fig.set_facecolor("none")
+        self.fig.tight_layout()
+        #        self.axes.set_axis_bgcolor("none")
         
-        FigureCanvas.__init__(self, fig)
+        FigureCanvas.__init__(self, self.fig)
         self.setParent(parent)
         
         FigureCanvas.setSizePolicy(self, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         FigureCanvas.updateGeometry(self)
-        
-        
+                
 class VisualizeDockWidget(QtWidgets.QWidget):
     """
     Matplotlib Viewer for Image Output
@@ -1737,7 +1791,6 @@ class VisualizeDockWidget(QtWidgets.QWidget):
         
     def __setup__(self):
         self.canvas = VisualizeCanvas()
-                
         self.pushButton_next = QtWidgets.QPushButton()
         self.pushButton_next.setIcon(QtGui.QIcon("./assets/iconArrowRight.png"))
         
@@ -1762,7 +1815,17 @@ class VisualizeDockWidget(QtWidgets.QWidget):
         
         self.setLayout(layout)
         
-    
+    def adjustAxes(self, dimension):
+        if dimension == 1:
+            self.canvas.fig.set_size_inches(7, 3)
+            self.canvas.updateGeometry()
+            
+        if dimension == 2:
+            self.canvas.fig.set_size_inches(7, 5)
+            print("set new canvas")
+#            self.canvas.updateGeometry()
+            
+            
 class LogDockWidget(QtWidgets.QTextEdit):
     def __init__(self, parent):
         super(LogDockWidget, self).__init__(parent)
@@ -1960,6 +2023,7 @@ class SimulationVariables:
         self.dimensions = kwargs["dimensions"]
         self.breaks = kwargs["breaks"]
         self.save = kwargs["save"]
+        self.savevisualize = kwargs["savevisualize"]
         self.visualize = kwargs["visualize"]
         self.alterPreferences = kwargs["alterPreferences"] 
         self.alterStatusQuo = kwargs["alterStatusQuo"]

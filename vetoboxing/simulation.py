@@ -1,7 +1,7 @@
-'''''''''
-'' vetoboxing.py
-'' This script is designed to run a simulation of veto player voting processes.
-'''''''''
+"""""""""
+"" vetoboxing.py
+"" This script is designed to run a simulation of veto player voting processes.
+"""""""""
 #----------------------------------------------------------------------------------------------------#
 import os
 import time
@@ -19,7 +19,7 @@ import matplotlib.lines as mlines
 from shapely.geometry import Point, LinearRing
 from scipy.spatial import distance as dist
 import copy
-logging.basicConfig(filename = 'vblog.log', level = logging.DEBUG)
+logging.basicConfig(filename = "vblog.log", level = logging.DEBUG)
 
 class Simulation():
     def __init__(self, Variables, parent = None):
@@ -68,7 +68,7 @@ class Simulation():
         self.totalPythDistance = np.zeros((self.Variables.runs, 1))
         self.totalManhDistance = np.zeros((self.Variables.runs, 1))
         
-        self.breakDecimal = pow(10, str(self.Variables.breaks)[::-1].find('.'))
+        self.breakDecimal = pow(10, str(self.Variables.breaks)[::-1].find("."))
         
         """if shapely, initialize shapely objects for each voter"""
         if self.Variables.method == "optimization":
@@ -245,7 +245,7 @@ class Simulation():
         return possible_coalitions
     
     
-    def determineDistance(self, point1, point2, distanceType = 'euclidean'):  
+    def determineDistance(self, point1, point2, distanceType = "euclidean"):  
         """
         Determine the distance between two points in any number of dimensions.
         As such, it can also be used to determine the radius of a preference circle (by inputting
@@ -274,7 +274,7 @@ class Simulation():
             return position  
 
         except MemoryError:
-            logging.error('Memory Error. Could not create grids // Try setting larger breaks')
+            logging.error("Memory Error. Could not create grids // Try setting larger breaks")
             raise
 
 
@@ -318,25 +318,25 @@ class Simulation():
         """
         Set the status quo for the new simulation based on alterStatusQuo and vibration distribution
         """       
-        # setting the appropriate vibration type
-        vibration = self.setVibration(self.statusQuo[run].shape)
-
-        # if the status quo doesn't change there is still vibration
-        if self.Variables.alterStatusQuo == 'no':
-            self.statusQuo[run + 1] = self.statusQuo[run] + vibration
+        # if the status quo doesn"t change there is still vibration
+        if self.Variables.alterStatusQuo == "no":
+            self.statusQuo[run + 1] = self.statusQuo[run]
+            
+        elif self.Variables.alterStatusQuo == "randomDrift":
+            self.statusQuo[run + 1] = self.statusQuo + self.setVibration(self.statusQuo[run].shape)
         
         # place a completely random status quo on the grid
         #TODO fix to only SQ in winset
-        elif self.Variables.alterStatusQuo == 'random':
-            self.statusQuo[run + 1] = np.random.uniform(0, 100, (1, self.Variables.dimensions)) + vibration
+        elif self.Variables.alterStatusQuo == "random":
+            self.statusQuo[run + 1] = np.random.uniform(0, 100, (1, self.Variables.dimensions))
         
         # alter status quo based on outcome and vibration
-        elif self.Variables.alterStatusQuo == 'history':
-            self.statusQuo[run + 1] = self.outcome[run] + vibration
+        elif self.Variables.alterStatusQuo == "history":
+            self.statusQuo[run + 1] = self.outcome[run]
             
         # alter status quo based on outcome of previous run, drift, and vibration
-        elif self.Variables.alterStatusQuo == 'history+drift':
-            self.statusQuo[run + 1] = self.outcomes[run] + vibration + self.Variables.statusQuoDrift
+        elif self.Variables.alterStatusQuo == "history+drift":
+            self.statusQuo[run + 1] = self.outcomes[run] + self.Variables.statusQuoDrift
         
             
     def alterPlayerPreferences(self, run):
@@ -344,14 +344,15 @@ class Simulation():
         Function to alter the preferences of the players for every run. Two options: preferences
         do not change (yet there is some vibration), or preferences have a drift in a certain
         direction.
-        """
-        # there is always vibration
-        self.voterPositionArray[:, run + 1, :] = self.voterPositionArray[:, run, :] + self.setVibration(size = self.voterPositionArray[:, run, :].shape)
-            
+        """  
+        if self.Variables.alterPreferences == "randomDrift":
+            self.voterPositionArray[:, run + 1, :] = self.voterPositionArray[:, run, :] + self.setVibration(size = self.voterPositionArray[:, run, :].shape)
+        
         if self.Variables.alterPreferences == "drift":
             self.voterPositionArray[:, run + 1, :] = self.voterPositionArray[:, run, :] + self.Variables.voterDrift
+            
              
-    def visualizeInit(self, animate = True):
+    def visualizeInit(self, animate = True, save = False):
         """
         Initialize Figure + Axis
         """  
@@ -373,19 +374,19 @@ class Simulation():
                       (self.voterPositionArray + self.voterRadiusArray)[:, :, 0].max())
             self.visLimits[1] = (0, self.voterRadiusArray.max())
             
-            fig = plt.figure(figsize = (20, 5))
-            ax = fig.add_subplot(111)
-            
-            for run in range(self.Variables.runs):
-                self.visualizeDrawOnAxis(1, ax, run, self.visLimits)
-                
-                filename = os.path.join(self.Variables.directory, "run" + str(run) + '.png')
-                fig.savefig(filename, bbox_inches = 'tight')
-                
-                if animate:
-                    filenames.append(filename)
+            if save is True:
+                fig = plt.figure(figsize = (20, 5))
+                ax = fig.add_subplot(111)
+                for run in range(self.Variables.runs):
+                    self.visualizeDrawOnAxis(1, ax, run, self.visLimits)
                     
-            plt.close(fig)
+                    filename = os.path.join(self.Variables.directory, "run" + str(run) + ".png")
+                    fig.savefig(filename, bbox_inches = "tight")
+                    
+                    if animate:
+                        filenames.append(filename)
+                        
+                plt.close(fig)
         
         elif self.Variables.dimensions == 2:
             """""""""
@@ -395,28 +396,30 @@ class Simulation():
                 self.visLimits[dim] = ((self.voterPositionArray - self.voterRadiusArray).min(),
                           (self.voterPositionArray + self.voterRadiusArray).max())
                 
-            self.Variables.traceTotalChange = False
-            if self.Variables.traceTotalChange is True:
-                fig, (ax, ax1) = plt.subplots(2, 1, gridspec_kw = {'height_ratios' : [4, 1]})
-                fig.set_size_inches(10, 10)
-                fig.set_dpi(80)
-                ax1.plot(range(self.Variables.runs), self.totalPythDistance, c = '#1f77b4')
-                ax1.scatter(run, self.totalPythDistance[run], c = '#d62728', s = 40, clip_on = False)
-
-            else:
-                fig = plt.figure(figsize = (18.5, 10.5))
-                ax = fig.add_subplot(111, aspect = 'equal')
                 
-            for run in range(self.Variables.runs):
-                self.visualizeDrawOnAxis(2, ax, run, self.visLimits)
-                
-                filename = os.path.join(self.Variables.directory, "run" + str(run) + '.png')
-                fig.savefig(filename, bbox_inches = 'tight')
-                
-                if animate:
-                    filenames.append(filename)
+            if save is True:
+                self.Variables.traceTotalChange = False
+                if self.Variables.traceTotalChange is True:
+                    fig, (ax, ax1) = plt.subplots(2, 1, gridspec_kw = {"height_ratios" : [4, 1]})
+                    fig.set_size_inches(10, 10)
+                    fig.set_dpi(80)
+                    ax1.plot(range(self.Variables.runs), self.totalPythDistance, c = "#1f77b4")
+                    ax1.scatter(run, self.totalPythDistance[run], c = "#d62728", s = 40, clip_on = False)
+    
+                else:
+                    fig = plt.figure(figsize = (18.5, 10.5))
+                    ax = fig.add_subplot(111, aspect = "equal")
                     
-            plt.close(fig)
+                for run in range(self.Variables.runs):
+                    self.visualizeDrawOnAxis(2, ax, run, self.visLimits)
+                    
+                    filename = os.path.join(self.Variables.directory, "run" + str(run) + ".png")
+                    fig.savefig(filename, bbox_inches = "tight")
+                    
+                    if animate:
+                        filenames.append(filename)
+                        
+                plt.close(fig)
                 
         elif self.Variables.dimensions == 3:
             """""""""
@@ -459,49 +462,49 @@ class Simulation():
                 index = np.where(np.squeeze(np.isin(self.voterRoleArray[run], 0)))[0]
     
                 ax.scatter(self.voterPositionArray[index, run], [0 for i in index],
-                           s = 70, c = 'black', label = 'Voters', clip_on = False)
+                           s = 70, c = "black", label = "Voters", clip_on = False)
     
                 norm_patches = [Circle((xx, 0), rr) for xx, rr in zip(self.voterPositionArray[index, run], self.voterRadiusArray[index, run])]
                         
-                norm_collection = PatchCollection(norm_patches, facecolors = 'grey', edgecolors = 'black', linewidths = 0.5, alpha = 0.2)
+                norm_collection = PatchCollection(norm_patches, facecolors = "grey", edgecolors = "black", linewidths = 0.5, alpha = 0.2)
             
                 ax.add_collection(norm_collection)
                 norm_collection.set_clip_box(ax.bbox)
     
     
             if 2 in self.voterRoleArray[run]:
-                index = np.where(np.squeeze(np.isin(self.voterRoleArray[run], 2)))[0]
+                index = np.where(np.squeeze(np.isin(self.voterRoleArray[run], 1)))[0]
                 
-                ax.scatter(self.voterPositionArray[index, run], [0 for i in index], s = 60, c = 'red', label = 'Veto Players', clip_on = False)
+                ax.scatter(self.voterPositionArray[index, run], [0 for i in index], s = 60, c = "red", label = "Veto Players", clip_on = False)
                 
                 veto_patches = [Circle((xx, 0), rr) for xx, rr in zip(self.voterPositionArray[index, run], self.voterRadiusArray[index, run])]
                         
-                veto_collection = PatchCollection(veto_patches, facecolors = 'red', edgecolors = 'black', linewidths = 0.5, alpha = 0.2)
+                veto_collection = PatchCollection(veto_patches, facecolors = "red", edgecolors = "black", linewidths = 0.5, alpha = 0.2)
                         
                 ax.add_collection(veto_collection)
                 veto_collection.set_clip_box(ax.bbox)
                         
-            index = np.where(np.squeeze(np.isin(self.voterRoleArray[run], 1)))[0]
-            
-            ax.scatter(self.voterPositionArray[index, run], [0], s = 60, c = 'lightblue', label = 'Agenda Setter', clip_on = False)
+            index = np.where(np.squeeze(np.isin(self.voterRoleArray[run], 2)))[0]
+
+            ax.scatter(self.voterPositionArray[index, run], 0, s = 60, c = "lightblue", label = "Agenda Setter", clip_on = False)
     
             as_patch = Circle((self.voterPositionArray[index, run], 0), self.voterRadiusArray[index, run],
-                                       facecolor = 'blue', edgecolor = 'black', linewidth = 0.5, alpha = 0.2)                      
+                                       facecolor = "blue", edgecolor = "black", linewidth = 0.5, alpha = 0.2)                      
                         
             ax.add_artist(as_patch)
             as_patch.set_clip_box(ax.bbox)
                     
-            ax.scatter(self.statusQuo[run], 0, s = 60, c = 'orange', label = 'Status Quo', clip_on = False)
+            ax.scatter(self.statusQuo[run], 0, s = 60, c = "orange", label = "Status Quo", clip_on = False)
                     
-            ax.scatter(self.outcomes[run], 0, s = 50, c = 'yellow', label = 'Outcome', clip_on = False)
+            ax.scatter(self.outcomes[run], 0, s = 50, c = "yellow", label = "Outcome", clip_on = False)
         
             box = ax.get_position()
                     
             ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
                     
-            ax.legend(scatterpoints = 1, loc = 'upper center', shadow = 'True', bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
+            ax.legend(scatterpoints = 1, loc = "upper center", shadow = "True", bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
                     
-            ax.annotate('Run: ' + str(run+1), xy = (1, 1), xycoords = 'axes fraction')
+            ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords = "axes fraction")
 
         elif dim == 2:
             """
@@ -516,13 +519,13 @@ class Simulation():
                 """
                 index = np.where(np.squeeze(self.voterRoleArray[run] == 0))[0]
 
-                ax.scatter(self.voterPositionArray[index, run, 0], self.voterPositionArray[index, run, 1], s = 30, c = '#7f7f7f', label = 'Voters')
+                ax.scatter(self.voterPositionArray[index, run, 0], self.voterPositionArray[index, run, 1], s = 30, c = "#7f7f7f", label = "Voters")
 
                 norm_patches = [Circle((xx, yy), rr) for xx, yy, rr in zip(self.voterPositionArray[index, run, 0],
                                 self.voterPositionArray[index, run, 1],
                                 self.voterRadiusArray[index, run])]
                                     
-                norm_collection = PatchCollection(norm_patches, facecolors = '#7f7f7f', edgecolors = 'black', linewidths = 0.5, alpha = 0.2)
+                norm_collection = PatchCollection(norm_patches, facecolors = "#7f7f7f", edgecolors = "black", linewidths = 0.5, alpha = 0.2)
                                     
                 ax.add_collection(norm_collection)
                 norm_collection.set_clip_box(ax.bbox)
@@ -534,7 +537,7 @@ class Simulation():
                 index = np.where(np.squeeze(self.voterRoleArray[run] == 1))[0]
                 
                 ax.scatter(self.voterPositionArray[index, run, 0], self.voterPositionArray[index, run, 1],
-                           s = 30, c = '#d62728', label = 'Veto Players')
+                           s = 30, c = "#d62728", label = "Veto Players")
                 
                 veto_patches = [Circle((xx, yy), rr) for xx, yy, rr in zip(
                         self.voterPositionArray[index, run, 0], 
@@ -552,13 +555,13 @@ class Simulation():
             """
             index = np.where(np.squeeze(self.voterRoleArray[run] == 2))[0]
             ax.scatter(self.voterPositionArray[index, run, 0], self.voterPositionArray[index, run, 1],
-                    s = 30, c = '#1f77b4', label = 'Agenda Setter')
+                    s = 30, c = "#1f77b4", label = "Agenda Setter")
             
             as_patch = Circle((
                     self.voterPositionArray[index, run, 0],
                     self.voterPositionArray[index, run, 1]),
                     self.voterRadiusArray[index, run],
-                    facecolor = '#1f77b4', edgecolor = 'black', linewidth = 0.5, alpha = 0.2)
+                    facecolor = "#1f77b4", edgecolor = "black", linewidth = 0.5, alpha = 0.2)
 
             ax.add_artist(as_patch)
             as_patch.set_clip_box(ax.bbox)
@@ -566,8 +569,8 @@ class Simulation():
             """
             plot status quo and outcome
             """
-            ax.scatter(self.statusQuo[run, 0], self.statusQuo[run, 1], s = 35, c = '#8c564b', label = 'Status Quo')
-            ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s = 30, c = '#ff7f0e', label = 'Outcome')
+            ax.scatter(self.statusQuo[run, 0], self.statusQuo[run, 1], s = 35, c = "#8c564b", label = "Status Quo")
+            ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s = 30, c = "#ff7f0e", label = "Outcome")
             
             """add precise winset patch"""
             if self.Variables.method == "optimization" and self.winsetPatches[run] is not None:
@@ -580,33 +583,30 @@ class Simulation():
                     UI_winsetPatch.figure = None
                     UI_winsetPatch.set_transform(ax.transData)
                     ax.add_collection(UI_winsetPatch)
-
-            else:
-                print(self.winsetPatches)
             
             #trace status quo
             if self.Variables.trace is True:
                 lines = [mlines.Line2D([self.statusQuo[run, 0], self.outcomes[run, 0]], 
                                        [self.statusQuo[run, 1], self.outcomes[run, 1]],
-                                       linewidth = 2, color = '#2ca02c', alpha = 1)]
+                                       linewidth = 2, color = "#2ca02c", alpha = 1)]
                     
                 if run <= 4:
                     lines += [mlines.Line2D([self.statusQuo[run - i - 1, 0], self.statusQuo[run - i, 0]],
                                             [self.statusQuo[run - i - 1, 1], self.statusQuo[run - i, 1]],
-                                            linewidth = 2, color = '#2ca02c', alpha = (0.8 - i * .2)) for i in range(run)]
+                                            linewidth = 2, color = "#2ca02c", alpha = (0.8 - i * .2)) for i in range(run)]
                     
                 else: 
                     lines += [mlines.Line2D([self.statusQuo[run - i - 1, 0], self.statusQuo[run - i, 0]], 
                                            [self.statusQuo[run - i - 1, 1], self.statusQuo[run - i, 1]],
-                                           linewidth = 2, color = '#2ca02c', alpha = (0.8 - i * .2)) for i in range(5)]
+                                           linewidth = 2, color = "#2ca02c", alpha = (0.8 - i * .2)) for i in range(5)]
 
                 [ax.add_line(line) for line in lines]
             
             box = ax.get_position()
                             
-            ax.legend(scatterpoints = 1, loc = 'upper center', shadow = 'True', bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
+            ax.legend(scatterpoints = 1, loc = "upper center", shadow = "True", bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
             
-            ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords='axes fraction')
+            ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords="axes fraction")
             
              
     def visualizeAnimate(self, filenames):
@@ -626,14 +626,14 @@ class Simulation():
 #                    index = np.where(np.squeeze(np.isin(self.voterRoleArray[run], 0)))[0]
 #                    
 #                    ax.scatter(self.voterPositionArray[index, run], [0 for i in index],
-#                               s = 70, c = 'black', label = 'Voters', clip_on = False)
+#                               s = 70, c = "black", label = "Voters", clip_on = False)
 #
 #                    norm_patches = [Circle((xx, 0), rr) for xx, rr in zip(
 #                            self.voterPositionArray[index, run], 
 #                            self.voterRadiusArray[index, run])]
 #                    
-#                    norm_collection = PatchCollection(norm_patches, facecolors = 'grey', 
-#                                                      edgecolors = 'black', linewidths = 0.5, alpha = 0.2)
+#                    norm_collection = PatchCollection(norm_patches, facecolors = "grey", 
+#                                                      edgecolors = "black", linewidths = 0.5, alpha = 0.2)
 #                    
 #                    ax.add_collection(norm_collection)
 #                    norm_collection.set_clip_box(ax.bbox)
@@ -645,47 +645,47 @@ class Simulation():
 #                    index = np.where(np.squeeze(np.isin(self.voterRoleArray[run], 2)))[0]
 #
 #                    ax.scatter(self.voterPositionArray[index, run], [0 for i in index],
-#                               s = 60, c = 'red', label = 'Veto Players', clip_on = False)
+#                               s = 60, c = "red", label = "Veto Players", clip_on = False)
 #                    
 #                    veto_patches = [Circle((xx, 0), rr) for xx, rr in zip(
 #                            self.voterPositionArray[index, run], 
 #                            self.voterRadiusArray[index, run])]
 #                    
-#                    veto_collection = PatchCollection(veto_patches, facecolors = 'red', 
-#                                                      edgecolors = 'black', linewidths = 0.5, alpha = 0.2)
+#                    veto_collection = PatchCollection(veto_patches, facecolors = "red", 
+#                                                      edgecolors = "black", linewidths = 0.5, alpha = 0.2)
 #                    
 #                    ax.add_collection(veto_collection)
 #                    veto_collection.set_clip_box(ax.bbox)
 #                    
 #                index = np.where(np.squeeze(np.isin(self.voterRoleArray[run], 1)))[0]
 #                print(self.voterPositionArray[index, run])
-#                ax.scatter(self.voterPositionArray[index, run], [0], s = 60, c = 'lightblue', label = 'Agenda Setter', clip_on = False)
+#                ax.scatter(self.voterPositionArray[index, run], [0], s = 60, c = "lightblue", label = "Agenda Setter", clip_on = False)
 #
 #                as_patch = Circle((self.voterPositionArray[index, run], 0), self.voterRadiusArray[index, run],
-#                                   facecolor = 'blue', edgecolor = 'black', linewidth = 0.5, alpha = 0.2)                      
+#                                   facecolor = "blue", edgecolor = "black", linewidth = 0.5, alpha = 0.2)                      
 #                    
 #                ax.add_artist(as_patch)
 #                as_patch.set_clip_box(ax.bbox)
 #                
-#                ax.scatter(self.statusQuo[run], 0, s = 60, c = 'orange', label = 'Status Quo', clip_on = False)
+#                ax.scatter(self.statusQuo[run], 0, s = 60, c = "orange", label = "Status Quo", clip_on = False)
 #                
-#                ax.scatter(self.outcomes[run], 0, s = 50, c = 'yellow', label = 'Outcome', clip_on = False)
+#                ax.scatter(self.outcomes[run], 0, s = 50, c = "yellow", label = "Outcome", clip_on = False)
 #    
 #                box = ax.get_position()
 #                
 #                ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
 #                
-#                ax.legend(scatterpoints = 1, loc = 'upper center', shadow = 'True', bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
+#                ax.legend(scatterpoints = 1, loc = "upper center", shadow = "True", bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
 #                
-#                ax.annotate('Run: ' + str(run+1), xy = (1, 1), xycoords = 'axes fraction')
+#                ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords = "axes fraction")
 #        
-#                filename = ''.join((self.Variables.directory, '/', str(run), '.png'))
+#                filename = "".join((self.Variables.directory, "/", str(run), ".png"))
 #                
-#                fig.savefig(filename, bbox_inches = 'tight')
+#                fig.savefig(filename, bbox_inches = "tight")
 #                                
 #                filenames.append(filename)
 #    
-#                plt.close('all')
+#                plt.close("all")
 #                
 #
 #        elif self.Variables.dimensions == 2:
@@ -700,15 +700,15 @@ class Simulation():
 #                
 #            self.Variables.traceTotalChange = False
 #            if self.Variables.traceTotalChange is True:
-#                fig, (ax, ax1) = plt.subplots(2, 1, gridspec_kw = {'height_ratios':[4, 1]})
+#                fig, (ax, ax1) = plt.subplots(2, 1, gridspec_kw = {"height_ratios":[4, 1]})
 #                fig.set_size_inches(10, 10)
 #                fig.set_dpi(80)
-#                ax1.plot(range(self.Variables.runs), self.totalPythDistance, c = '#1f77b4')
-#                ax1.scatter(run, self.totalPythDistance[run], c = '#d62728', s = 40, clip_on = False)
+#                ax1.plot(range(self.Variables.runs), self.totalPythDistance, c = "#1f77b4")
+#                ax1.scatter(run, self.totalPythDistance[run], c = "#d62728", s = 40, clip_on = False)
 #
 #            else:
 #                fig = plt.figure(figsize = (18.5, 10.5))
-#                ax = fig.add_subplot(111, aspect='equal')
+#                ax = fig.add_subplot(111, aspect="equal")
 #                    
 #
 #                
@@ -723,15 +723,15 @@ class Simulation():
 #                    index = np.where(np.squeeze(self.voterRoleArray[run] == 0))[0]
 #
 #                    ax.scatter(self.voterPositionArray[index, run, 0], self.voterPositionArray[index, run, 1],
-#                            s = 30, c = '#7f7f7f', label = 'Voters')
+#                            s = 30, c = "#7f7f7f", label = "Voters")
 #
 #                    norm_patches = [Circle((xx, yy), rr) for xx, yy, rr in zip(
 #                                    self.voterPositionArray[index, run, 0],
 #                                    self.voterPositionArray[index, run, 1],
 #                                    self.voterRadiusArray[index, run])]
 #                                    
-#                    norm_collection = PatchCollection(norm_patches, facecolors = '#7f7f7f',
-#                                                      edgecolors = 'black', linewidths = 0.5, alpha = 0.2)
+#                    norm_collection = PatchCollection(norm_patches, facecolors = "#7f7f7f",
+#                                                      edgecolors = "black", linewidths = 0.5, alpha = 0.2)
 #                                    
 #                    ax.add_collection(norm_collection)
 #                    norm_collection.set_clip_box(ax.bbox)
@@ -743,7 +743,7 @@ class Simulation():
 #                    index = np.where(np.squeeze(self.voterRoleArray[run] == 1))[0]
 #                    
 #                    ax.scatter(self.voterPositionArray[index, run, 0], self.voterPositionArray[index, run, 1],
-#                               s = 30, c = '#d62728', label = 'Veto Players')
+#                               s = 30, c = "#d62728", label = "Veto Players")
 #                    
 #                    veto_patches = [Circle((xx, yy), rr) for xx, yy, rr in zip(
 #                            self.voterPositionArray[index, run, 0], 
@@ -761,13 +761,13 @@ class Simulation():
 #                """
 #                index = np.where(np.squeeze(self.voterRoleArray[run] == 2))[0]
 #                ax.scatter(self.voterPositionArray[index, run, 0], self.voterPositionArray[index, run, 1],
-#                        s = 30, c = '#1f77b4', label = 'Agenda Setter')
+#                        s = 30, c = "#1f77b4", label = "Agenda Setter")
 #                
 #                as_patch = Circle((
 #                        self.voterPositionArray[index, run, 0],
 #                        self.voterPositionArray[index, run, 1]),
 #                        self.voterRadiusArray[index, run],
-#                        facecolor = '#1f77b4', edgecolor = 'black', linewidth = 0.5, alpha = 0.2)
+#                        facecolor = "#1f77b4", edgecolor = "black", linewidth = 0.5, alpha = 0.2)
 #
 #                ax.add_artist(as_patch)
 #                as_patch.set_clip_box(ax.bbox)
@@ -775,8 +775,8 @@ class Simulation():
 #                """
 #                plot status quo and outcome
 #                """
-#                ax.scatter(self.statusQuo[run, 0], self.statusQuo[run, 1], s = 35, c = '#8c564b', label = 'Status Quo')
-#                ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s = 30, c = '#ff7f0e', label = 'Outcome')
+#                ax.scatter(self.statusQuo[run, 0], self.statusQuo[run, 1], s = 35, c = "#8c564b", label = "Status Quo")
+#                ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s = 30, c = "#ff7f0e", label = "Outcome")
 #                
 #                """add precise winset patch"""
 #                if self.Variables.method == "optimization" and self.winsetPatches[run] is not None:
@@ -786,17 +786,17 @@ class Simulation():
 #                if self.Variables.trace is True:
 #                    lines = [mlines.Line2D([self.statusQuo[run, 0], self.outcomes[run, 0]], 
 #                                           [self.statusQuo[run, 1], self.outcomes[run, 1]],
-#                                           linewidth = 2, color = '#2ca02c', alpha = 1)]
+#                                           linewidth = 2, color = "#2ca02c", alpha = 1)]
 #                        
 #                    if run <= 4:
 #                        lines += [mlines.Line2D([self.statusQuo[run - i - 1, 0], self.statusQuo[run - i, 0]],
 #                                                [self.statusQuo[run - i - 1, 1], self.statusQuo[run - i, 1]],
-#                                                linewidth = 2, color = '#2ca02c', alpha = (0.8 - i * .2)) for i in range(run)]
+#                                                linewidth = 2, color = "#2ca02c", alpha = (0.8 - i * .2)) for i in range(run)]
 #                        
 #                    else: 
 #                        lines += [mlines.Line2D([self.statusQuo[run - i - 1, 0], self.statusQuo[run - i, 0]], 
 #                                               [self.statusQuo[run - i - 1, 1], self.statusQuo[run - i, 1]],
-#                                               linewidth = 2, color = '#2ca02c', alpha = (0.8 - i * .2)) for i in range(5)]
+#                                               linewidth = 2, color = "#2ca02c", alpha = (0.8 - i * .2)) for i in range(5)]
 #    
 #                    [ax.add_line(line) for line in lines]
 #                
@@ -804,13 +804,13 @@ class Simulation():
 #                
 ##                ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
 #                
-#                ax.legend(scatterpoints = 1, loc = 'upper center', shadow = 'True', bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
+#                ax.legend(scatterpoints = 1, loc = "upper center", shadow = "True", bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
 #                
-#                ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords='axes fraction')
+#                ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords="axes fraction")
 #    
-#                filename = os.path.join(self.Variables.directory, "run" + str(run) + '.png')
+#                filename = os.path.join(self.Variables.directory, "run" + str(run) + ".png")
 #                print(filename)
-#                fig.savefig(filename, bbox_inches = 'tight', dpi = 100)
+#                fig.savefig(filename, bbox_inches = "tight", dpi = 100)
 #                    
 #                filenames.append(filename)
 #                
@@ -841,7 +841,7 @@ class Simulation():
 #            for run in range(self.Variables.runs):
 #            
 #                fig = plt.figure(figsize = (18.5, 10.5), dpi = 80)
-#                ax = fig.gca(projection='3d')
+#                ax = fig.gca(projection="3d")
 #                ax.set_aspect("equal")
 #              
 #                ax.set_xlim(vis_limits[0, 0], vis_limits[0, 1])
@@ -855,10 +855,10 @@ class Simulation():
 #                            self.voterPositionArray[index, run, 0], 
 #                            self.voterPositionArray[index, run, 1],
 #                            self.voterPositionArray[index, run, 2],
-#                            s = 40, c = '#7f7f7f', label = 'Voters'
+#                            s = 40, c = "#7f7f7f", label = "Voters"
 #                            )
 #                    
-#                    [ax.plot_wireframe(*drawSphere(xx, yy, zz, rr), color='#7f7f7f', linewidths = 1, alpha = 0.3) for xx, yy, zz, rr in zip(
+#                    [ax.plot_wireframe(*drawSphere(xx, yy, zz, rr), color="#7f7f7f", linewidths = 1, alpha = 0.3) for xx, yy, zz, rr in zip(
 #                            self.voterPositionArray[index, run, 0],
 #                            self.voterPositionArray[index, run, 1],
 #                            self.voterPositionArray[index, run, 2],
@@ -870,9 +870,9 @@ class Simulation():
 #                    ax.scatter(self.voterPositionArray[index, run, 0], 
 #                               self.voterPositionArray[index, run, 1],
 #                               self.voterPositionArray[index, run, 2],
-#                               s = 40, c = '#d62728', label = 'Veto Players')
+#                               s = 40, c = "#d62728", label = "Veto Players")
 #                    
-#                    [ax.plot_wireframe(*drawSphere(xx, yy, zz, rr), color='#d62728', linewidths = 1, alpha = 0.3) for xx, yy, zz, rr in zip(
+#                    [ax.plot_wireframe(*drawSphere(xx, yy, zz, rr), color="#d62728", linewidths = 1, alpha = 0.3) for xx, yy, zz, rr in zip(
 #                            self.voterPositionArray[index, run, 0],
 #                            self.voterPositionArray[index, run, 1],
 #                            self.voterPositionArray[index, run, 2],
@@ -883,16 +883,16 @@ class Simulation():
 #                ax.scatter(
 #                        self.voterPositionArray[index, run, 0],
 #                        self.voterPositionArray[index, run, 1],
-#                        s = 30, c = '#1f77b4', label = 'Agenda Setter'
+#                        s = 30, c = "#1f77b4", label = "Agenda Setter"
 #                        )
 #                
 #                ax.plot_wireframe(*drawSphere(self.voterPositionArray[index, run, 0], 
 #                                              self.voterPositionArray[index, run, 1],
 #                                              self.voterPositionArray[index, run, 2],
-#                                              self.voterRadiusArray[index, run]), color = '#1f77b4', alpha = 0.3)
+#                                              self.voterRadiusArray[index, run]), color = "#1f77b4", alpha = 0.3)
 #                
-#                ax.scatter(self.statusQuo[run, 0], self.statusQuo[run, 1], self.statusQuo[run, 2], s = 55, c = '#8c564b', alpha = 1, label = 'Status Quo')
-#                ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], self.outcomes[run, 2], s = 50, c = '#ff7f0e', alpha = 1, label = 'Outcome')               
+#                ax.scatter(self.statusQuo[run, 0], self.statusQuo[run, 1], self.statusQuo[run, 2], s = 55, c = "#8c564b", alpha = 1, label = "Status Quo")
+#                ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], self.outcomes[run, 2], s = 50, c = "#ff7f0e", alpha = 1, label = "Outcome")               
 #            
 #                if self.Variables.trace is True:     
 #                    line1 = [(self.statusQuo[run, 0], self.outcomes[run, 0]),
@@ -909,30 +909,30 @@ class Simulation():
 #                                  (self.statusQuo[run - i - 1, 1], self.statusQuo[run - i, 1]),
 #                                  (self.statusQuo[run - i - 1, 2], self.statusQuo[run - i, 2])] for i in range(5)]
 #                        
-#                    ax.plot(*line1, alpha = 1, color = '#2ca02c')
+#                    ax.plot(*line1, alpha = 1, color = "#2ca02c")
 #                    for i, item in enumerate(lines):
-#                        ax.plot(item[0], item[1], item[2], color = '#2ca02c', alpha = (0.8 - i * .2))
+#                        ax.plot(item[0], item[1], item[2], color = "#2ca02c", alpha = (0.8 - i * .2))
 #    
 #                box = ax.get_position()
 #                
 #                ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
 #                
-#                ax.legend(scatterpoints = 1, loc = 'upper center', shadow = 'True', bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
+#                ax.legend(scatterpoints = 1, loc = "upper center", shadow = "True", bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
 #                
-#                ax.annotate('Run: ' + str(run+1), xy = (1, 1), xycoords = 'axes fraction')
+#                ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords = "axes fraction")
 #    
-#                filename = os.path.join(self.Variables.directory, "run" + str(run) + '.png')
+#                filename = os.path.join(self.Variables.directory, "run" + str(run) + ".png")
 #                
-#                fig.savefig(filename, bbox_inches = 'tight')
+#                fig.savefig(filename, bbox_inches = "tight")
 #                    
 #                filenames.append(filename)
 #                
-#                plt.close('all')    
+#                plt.close("all")    
 #                            
 #        if animate is True:
 #            import imageio
 #            images = [imageio.imread(file) for file in filenames]
-#            imageio.mimsave(os.path.join(self.Variables.directory, 'animation.gif'), images, duration = 1 / 10)
+#            imageio.mimsave(os.path.join(self.Variables.directory, "animation.gif"), images, duration = 1 / 10)
             
             
     def saveResults(self):
@@ -940,14 +940,14 @@ class Simulation():
         Save results to csv
         """
         colnames = [y for x in [
-                ['Voter ' + str(i + 1) + '-' + voter + '-ROLE'] + 
-                ['Voter ' + str(i + 1) + '-' + voter + '-DIM-' + str(dim + 1) for dim in range(self.Variables.dimensions)] +
-                ['Voter ' + str(i + 1) + '-' + voter + '-RADIUS'] for i, voter in enumerate(self.Variables.voterNames)] for y in x] +\
-                ['Status Quo' + '-DIM ' + str(dim + 1) for dim in range(self.Variables.dimensions)]+\
-                ['Outcome' + '-DIM ' + str(dim + 1) for dim in range(self.Variables.dimensions)]+\
-                ['Total Euclidean Distance', 'Total Manhattan Distance']+\
-                ['Distance' + '-dim ' + str(dim + 1) for dim in range(self.Variables.dimensions)]+\
-                ['Number Veto Players', 'Number Normal Voters']
+                ["Voter " + str(i + 1) + "-" + voter + "-ROLE"] + 
+                ["Voter " + str(i + 1) + "-" + voter + "-DIM-" + str(dim + 1) for dim in range(self.Variables.dimensions)] +
+                ["Voter " + str(i + 1) + "-" + voter + "-RADIUS"] for i, voter in enumerate(self.Variables.voterNames)] for y in x] +\
+                ["Status Quo" + "-DIM " + str(dim + 1) for dim in range(self.Variables.dimensions)]+\
+                ["Outcome" + "-DIM " + str(dim + 1) for dim in range(self.Variables.dimensions)]+\
+                ["Total Euclidean Distance", "Total Manhattan Distance"]+\
+                ["Distance" + "-dim " + str(dim + 1) for dim in range(self.Variables.dimensions)]+\
+                ["Number Veto Players", "Number Normal Voters"]
 
         #data
         
@@ -968,7 +968,7 @@ class Simulation():
         # setting up filename and folder
         timestr = time.strftime("%Y-%m-%d_%H%M")
         
-        filename = ''.join(("results", "-", str(self.Variables.runs), "r-", str(self.Variables.dimensions), "d-", "__", timestr, ".csv"))
+        filename = "".join(("results", "-", str(self.Variables.runs), "r-", str(self.Variables.dimensions), "d-", "__", timestr, ".csv"))
         
         csv_path = os.path.join(self.Variables.directory, filename)
     
