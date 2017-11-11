@@ -2,7 +2,7 @@
 ## Dependencies
 [Shapely](https://anaconda.org/conda-forge/shapely)
 
-scipy, pandas, numpy, matplotlib that are included in anaconda
+PyQt5, scipy, pandas, numpy, matplotlib that are included in anaconda
 
 ## Run Vetoboxing
 ```
