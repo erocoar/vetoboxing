@@ -10,7 +10,7 @@ python vetoboxing.py
 ```
 
 ## Interface
-![][(https://puu.sh/yjBu4/53af0408fe.png)
+![](https://puu.sh/yjBu4/53af0408fe.png)
 ### Main Toolbar
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/mainToolbar.png)
 
