@@ -10,6 +10,7 @@ python vetoboxing.py
 ```
 
 ## Interface
+![][(https://puu.sh/yjBu4/53af0408fe.png)
 ### Main Toolbar
 ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/mainToolbar.png)
 
@@ -72,7 +73,7 @@ The game widget is where you can manage and set up simulations (games). Each tab
 
 (currently not connected)
 #### Run
-![](https://puu.sh/yjbRD/c4ee03efb3.png)
+![](https://puu.sh/yjBuF/ff1340743f.png)
 
 Run settings are specific to each game (that is, each tab).
 
@@ -86,7 +87,9 @@ Run settings are specific to each game (that is, each tab).
 
 **Save** If yes, a CSV with data of all runs will be created
 
-**Visualize** If yes, data will be visualized and displayed in the plot widget. Note: Currently, there is no option to not save plots and only display them in UI. They will be saved first.
+**Visualize** If yes, data will be visualized and displayed in the plot widget.
+
+**Save Visualize** If yes, plots of each run will be made and saved. **NOTE** that if this is set to yes, and visualize is also set to yes, plots will be made and saved BEFORE plot data is sent to the UI. It takes about 1 second per plot to save.
 
 **Alter Preferences** Drift: Voter positions drift a specified (or random) amount every run. No: Voter positions are fixed.
 
