@@ -83,7 +83,11 @@ Run settings are specific to each game (that is, each tab).
 
 **Breaks** specifies the density of the grid on which the game is evaluated - this is only necessary if the grid method is selected
 
-**Method** Grid: Evaluate the game on a grid of points. Optimization: Evaluate via circle intersections and interpolation. Optimization can only be chosen for 1D and 2D.
+**Method** 
+
+Grid: Evaluate the game on a grid of points. 
+
+Optimization: Evaluate via circle intersections and interpolation. Optimization can only be chosen for 1D and 2D.
 
 **Save** If yes, a CSV with data of all runs will be created
 
@@ -91,9 +95,21 @@ Run settings are specific to each game (that is, each tab).
 
 **Save Visualize** If yes, plots of each run will be made and saved. **NOTE** that if this is set to yes, and visualize is also set to yes, plots will be made and saved BEFORE plot data is sent to the UI. It takes about 1 second per plot to save.
 
-**Alter Preferences** Drift: Voter positions drift a specified (or random) amount every run. No: Voter positions are fixed.
+**Alter Preferences** 
 
-**Alter Status Quo** History + Drift: Status Quo is evaluated on history (the outcome of a voting game becomes the new status quo) and drift (specified or random). History: The outcome of a run becomes the new status quo. Random: The status quo changes randomly every run. No: Status Quo is constant. 
+Drift: Voter positions drift a specified (or random) amount every run. 
+
+No: Voter positions are fixed.
+
+**Alter Status Quo** 
+
+History + Drift: Status Quo is evaluated on history (the outcome of a voting game becomes the new status quo) and drift (specified or random). 
+
+History: The outcome of a run becomes the new status quo. 
+
+Random: The status quo changes randomly every run. 
+
+No: Status Quo is constant. 
 
 **Distance Type** Euclidean or City-Block
 
