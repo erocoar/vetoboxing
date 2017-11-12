@@ -87,7 +87,7 @@ Run settings are specific to each game (that is, each tab).
 
 Grid: Evaluate the game on a grid of points. 
 
-Optimization: Evaluate via circle intersections and interpolation. Optimization can only be chosen for 1D and 2D.
+Optimization: Evaluate via circle intersections and interpolation. Optimization can only be chosen for 2D.
 
 **Save** If yes, a CSV with data of all runs will be created
 
