@@ -115,6 +115,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.toolbar_logo.addWidget(vb_label)
         
     def load(self):
+        options = None
+        
         file = QtWidgets.QFileDialog.getOpenFileName(filter = "Text Files (*.txt)")
         
         if file[0]: 
@@ -125,10 +127,16 @@ class MainWindow(QtWidgets.QMainWindow):
                 raise    
         else:
             return
-                
-        if "voters" and "statusquo" in seq or "sequence" in seq:
-            self.voterWidget.loadTable(seq)
         
+        if "runSettings" in seq:
+            options = GameTableOptions(fromLoad = True, settings = seq["runSettings"])
+          
+        if "voters" and "statusquo" in seq or "sequence" in seq:
+            self.voterWidget.loadTable(seq, options)
+            
+
+    
+            
         if "visualizationSettings" in seq:
             self.optionsWidget.__loadOptions__(seq["visualizationSettings"])
         
@@ -316,11 +324,12 @@ class MainWindow(QtWidgets.QMainWindow):
             
         if toUIPlot is True:
             self.visualizeWidget.adjustAxes(var.dimensions)
-            print("UI PLOT TRUE RUN HERE")
+
             """Indexing the run plots"""
             def visualizePlotIndexer(direction):
                 if direction == "next":
                     if self.index == var.runs - 1:
+                        print("index max returned")
                         return
                     else:
                         sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index + 1, sim.visLimits, fromUI = True)
@@ -589,32 +598,37 @@ class VoterSetup(QtWidgets.QWidget):
         for i in range(3):
             self.tabWidget.addTab(GameTable(self, 2), "Test")
         
-    def loadTable(self, seq):
+    def loadTable(self, seq, options = None):
         if "sequence" in seq:
             self.tabWidget.currentWidget().customRoleArray = seq["sequence"]
             
         else:
             self.fromLoadAdd = True
-            self.tabWidget.insertTab(self.tabWidget.count() - 1, GameTable(self, fromLoad = True, file = seq), "Test2")
+            self.tabWidget.insertTab(self.tabWidget.count() - 1, GameTable(self, fromLoad = True, file = seq, options = options), "Test2")
             self.tabWidget.setCurrentIndex(self.tabWidget.count() - 2)
             self.fromLoadAdd  = False
             
         
 class GameTable(QtWidgets.QWidget):
-    def __init__(self, parent, dimInit = 2, fromLoad = False, file = None):
+    def __init__(self, parent, dimInit = 2, fromLoad = False, file = None, options = None):
         super(GameTable, self).__init__(parent)
-                
-        self.options = GameTableOptions()
+         
         self.customRoleArray = None
         
         if not fromLoad:
+            self.options = GameTableOptions()
             self.__setup__(dimInit)
             self.__layout__()
             
         else:
+            if options:
+                self.options = options
+            else:
+                self.options = GameTableOptions()
+                
             self.__loadTable__(file)
             self.__layout__()
-                 
+                             
     def __setup__(self, dimInit):
         self.voterTable = TableWidget()
         self.voterTable.setColumnCount(3 + dimInit)
@@ -794,18 +808,33 @@ class GameTable(QtWidgets.QWidget):
 
 
 class GameTableOptions:
-    def __init__(self):        
-        self.runs = 1
-        self.dimensions = 2
-        self.breaks = 0.01
-        self.method = "grid"
-        self.save = "yes"
-        self.visualize = "yes"
-        self.alterPreferences = "no"
-        self.alterStatusQuo = "history+drift"
-        self.distanceType = "euclidean"
-        self.distribution = "uniform"
-        self.savevisualize = "no"
+    def __init__(self, fromLoad = False, settings = None):    
+        if fromLoad is False:
+            self.runs = 1
+            self.dimensions = 2
+            self.breaks = 0.01
+            self.method = "grid"
+            self.save = "yes"
+            self.visualize = "yes"
+            self.alterPreferences = "no"
+            self.alterStatusQuo = "history+drift"
+            self.distanceType = "euclidean"
+            self.distribution = "uniform"
+            self.savevisualize = "no"
+    
+        else:
+            self.runs = settings["runs"]
+            self.dimensions = settings["dimensions"]
+            self.breaks = settings["breaks"]
+#            self.method = settings["method"]
+            self.save = settings["save"]
+            self.visualize = settings["visualize"]
+            self.alterPreferences = settings["alterPreferences"]
+            self.alterStatusQuo = settings["alterStatusQuo"]
+            self.distanceType = settings["distanceType"]
+            self.distribution = settings["distribution"]
+            self.savevisualize = settings["savevisualize"]
+            
         
         
 class OptionsWidget(QtWidgets.QWidget):
@@ -879,11 +908,11 @@ class OptionsWidget(QtWidgets.QWidget):
         self.runOptions.spinBox_dimensions.setValue(GameTableOptions.dimensions)
         self.runOptions.doubleSpinBox_breaks.setValue(GameTableOptions.breaks)
         
-        """method"""
-        if GameTableOptions.method == "grid":
-            self.runOptions.radioButton_pointGrid.setChecked(True)
-        else:
-            self.runOptions.radioButton_optimization.setChecked(True)
+#        """method"""
+#        if GameTableOptions.method == "grid":
+#            self.runOptions.radioButton_pointGrid.setChecked(True)
+#        else:
+#            self.runOptions.radioButton_optimization.setChecked(True)
         
         """save"""
         if GameTableOptions.save == "yes":

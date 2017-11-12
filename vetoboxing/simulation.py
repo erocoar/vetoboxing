@@ -32,12 +32,16 @@ class Simulation():
         
         """Initialize Voter Arrays"""
         self.voterPositionArray = np.zeros((self.Variables.votercount, self.Variables.runs, self.Variables.dimensions))
-        self.voterPositionArray[:, 0, :] = self.Variables.voterPositions
+        
+        if not self.Variables.alterPreferences == "drift":
+            for i, voter in enumerate(self.Variables.voterPositions):
+                self.voterPositionArray[i] = voter
+        else:
+            self.voterPositionArray[:, 0, :] = self.Variables.voterPositions
         
         self.voterRadiusArray = np.zeros((self.Variables.votercount, self.Variables.runs, 1))
         
         if self.Variables.customRoleArray:
-            print("use CRA")
             self.voterRoleArray = np.array(self.Variables.customRoleArray)
         else:
             if self.Variables.randomVetoPlayer and not self.Variables.randomAgendaSetter:
@@ -84,7 +88,6 @@ class Simulation():
             print("run nr {0} running".format(str(run + 1)))
             
             """get indexes for all roles for specific run"""
-            print(self.voterRoleArray)
             agendaSetterIndex = np.where(self.voterRoleArray[run, :] == 2)[0]
             vetoPlayerIndex = np.where(self.voterRoleArray[run, :] == 1)[0]
             normalPlayerIndex = np.where(self.voterRoleArray[run, :] == 0)[0]
@@ -108,8 +111,8 @@ class Simulation():
                 self.totalManhDistance[run] = 0
                 self.dimensionDistance[run] = [0 for _ in range(self.Variables.dimensions)]
                 if self.Variables.runs > 1 and run != self.Variables.runs - 1: 
-                    self.alterStatusQuo()
-                    self.alterPlayerPreferences()
+                    self.alterStatusQuo(run)
+                    self.alterPlayerPreferences(run)
                 continue
             
             """determine possible coalitions given a selected majority rule -- coalitions necessarily include veto players and agenda setter"""
@@ -217,7 +220,7 @@ class Simulation():
                 
 #        if self.Variables.visualize:
 #            self.visualizeResults()
-            
+        
         if self.Variables.save:
             self.saveResults()
             
@@ -251,11 +254,11 @@ class Simulation():
         As such, it can also be used to determine the radius of a preference circle (by inputting
         a point and the status quo).
         """
-        if point1.ndim == 1:
-            point1 = point1[None, :]
-            
-        if point2.ndim == 1:
-            point2 = point2[None, :]
+#        if point1.ndim == 1:
+#            point1 = point1[None, :]
+#            
+#        if point2.ndim == 1:
+#            point2 = point2[None, :]
           
         return dist.cdist(point1, point2, metric = distanceType)
     
@@ -332,7 +335,7 @@ class Simulation():
         
         # alter status quo based on outcome and vibration
         elif self.Variables.alterStatusQuo == "history":
-            self.statusQuo[run + 1] = self.outcome[run]
+            self.statusQuo[run + 1] = self.outcomes[run]
             
         # alter status quo based on outcome of previous run, drift, and vibration
         elif self.Variables.alterStatusQuo == "history+drift":
@@ -357,7 +360,7 @@ class Simulation():
         Initialize Figure + Axis
         """  
         """""""Initialize ax lim array"""""""
-        print("called")
+        print("called vis init")
         if self.Variables.dimensions == 1:
             self.visLimits = np.zeros((2, 2))
         else:
@@ -448,7 +451,7 @@ class Simulation():
         Clear and then plot on given axis
         """
         print("plot fig" + str(run))
-        ax.cla()
+        ax.clear()
         
         if dim == 1:
             """
@@ -499,9 +502,7 @@ class Simulation():
             ax.scatter(self.outcomes[run], 0, s = 50, c = "yellow", label = "Outcome", clip_on = False)
         
             box = ax.get_position()
-                    
-            ax.set_position([box.x0, box.y0 + box.height * 0.1, box.width, box.height * 0.9])
-                    
+                                        
             ax.legend(scatterpoints = 1, loc = "upper center", shadow = "True", bbox_to_anchor = (0.5, -0.05), ncol = 3, fancybox = True)
                     
             ax.annotate("Run: " + str(run+1), xy = (1, 1), xycoords = "axes fraction")
