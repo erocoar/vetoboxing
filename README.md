@@ -49,7 +49,7 @@ python vetoboxing.py
 
 The game widget is where you can manage and set up simulations (games). Each tab here represents a game **with its own distinct run options** (this means, when switching tabs, the run options will change to the now selected game's options - also in the settings). 
 
-   The first table represents the voters. Names and starting positions per dimension can be filled in. Agenda setter and veto player roles can be assigned by entering True or False (alternatively, 1 or 0) for every voter. Note that the agenda setter role can only be assigned once, but has to be assigned.
+   The first table represents the voters. Names and starting positions per dimension can be filled in. Agenda setter and veto player roles can be assigned by entering True or False (alternatively, 1 or 0) for every voter. Note that the agenda setter role can only be assigned once, but has to be assigned. Alternatively, rather than directly assigning the roles, you can enter "random" to have the roles randomized every run. In the outcome folder, a file containing the random role distribution will be attached and can be loaded into new games.
  
  ### Game Widget Toolbar
  ![](https://github.com/erocoar/vetoboxing/blob/master/vetoboxing/rmd/gameTableToolbar.png)
