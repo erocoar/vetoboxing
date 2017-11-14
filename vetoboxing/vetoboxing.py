@@ -4,8 +4,10 @@ Created on Thu Oct 19 00:55:58 2017
 
 @author: Frederik
 """
+#TODO enter Random -> random... general try except handling
 import sys
 import os
+import warnings
 import json
 import errno
 import time
@@ -147,10 +149,14 @@ class MainWindow(QtWidgets.QMainWindow):
         otherOptions = self.optionsWidget.__saveOptions__()
         tables = self.voterWidget.tabWidget.currentWidget().__saveTable__()
         
-        out = dict(**runOptions, **otherOptions, **tables)
+        """2.7 way for pyinstaller support""" #TODO fix
+        out1 = runOptions.copy()
+        out1.update(otherOptions)
+        out1.update(tables)
+#        out = dict(**runOptions, **otherOptions, **tables)
         
         with open(os.path.join(file, "save.txt"), "w") as outfile:
-            json.dump(out, outfile)
+            json.dump(out1, outfile)
         
         
     def showPreferences(self):
@@ -244,7 +250,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.optionsWidget.runOptions.buttonGroup_save.buttonToggled.connect(lambda: 
             self.updateGameTableOptions("save", self.optionsWidget.runOptions.buttonGroup_save.checkedButton().text().lower()))
-            
+                
         self.optionsWidget.runOptions.buttonGroup_visualize.buttonToggled.connect(lambda: 
             self.updateGameTableOptions("visualize", self.optionsWidget.runOptions.buttonGroup_visualize.checkedButton().text().lower()))
             
@@ -262,6 +268,10 @@ class MainWindow(QtWidgets.QMainWindow):
             
         self.optionsWidget.runOptions.buttonGroup_saveVisualize.buttonToggled.connect(lambda:
             self.updateGameTableOptions("savevisualize", self.optionsWidget.runOptions.buttonGroup_saveVisualize.checkedButton().text().lower()))
+            
+        #TODO catch error here when no game is connected
+        self.visualizeWidget.pushButton_next.clicked.connect(self.visualizePlotForw)
+        self.visualizeWidget.pushButton_prev.clicked.connect(self.visualizePlotBack)
             
     def updateGameTableOptions(self, option, value):
         if option == "runs":
@@ -301,66 +311,70 @@ class MainWindow(QtWidgets.QMainWindow):
         self.voterWidget.__addTab__(index)
         self.optionsWidget.__setRunOptions__(self.voterWidget.tabWidget.currentWidget().options)
         
+    def visualizePlotForw(self):
+        try:
+            if self.index == self.var.runs - 1:
+                return
+            else:
+                self.sim.visualizeDrawOnAxis(self.var.dimensions, self.visualizeWidget.canvas.axes, self.index + 1, self.sim.visLimits, fromUI = True)
+                self.index += 1
+                self.visualizeWidget.canvas.draw()
+        except AttributeError:
+            return
+            
+    def visualizePlotBack(self):
+        try:
+            if self.index == 0:
+                return
+            else:
+                self.sim.visualizeDrawOnAxis(self.var.dimensions, self.visualizeWidget.canvas.axes, self.index - 1, self.sim.visLimits, fromUI = True)
+                self.index -= 1
+                self.visualizeWidget.canvas.draw()
+        except AttributeError:
+            return
+    
     def runSimulation(self):
-        var = self.readValues()
+        try:
+            self.var = self.readValues()
+            
+        except ValueError:
+            return
         
+        except:
+            raise
+            
+        self.index = 0 
         toUIPlot = False
         
         import simulation as vb
         
-        sim = vb.Simulation(var, self)
-        sim.simulation()
+        self.sim = vb.Simulation(self.var, self)
+        self.sim.simulation()
         
-        if var.visualize == "yes" and var.savevisualize == "yes":
-            sim.visualizeInit(save = True)
+        if self.var.visualize == "yes" and self.var.savevisualize == "yes":
+            self.sim.visualizeInit(save = True)
             toUIPlot = True
             
-        elif var.visualize == "no" and var.savevisualize == "yes":
-            sim.visualizeInit(save = True)
+        elif self.var.visualize == "no" and self.var.savevisualize == "yes":
+            self.sim.visualizeInit(save = True)
             
-        elif var.visualize == "yes" and var.savevisualize == "no":
-            sim.visualizeInit(save = False)
+        elif self.var.visualize == "yes" and self.var.savevisualize == "no":
+            self.sim.visualizeInit(save = False)
             toUIPlot = True
             
         if toUIPlot is True:
-            self.visualizeWidget.adjustAxes(var.dimensions)
-
-            """Indexing the run plots"""
-            def visualizePlotIndexer(direction):
-                if direction == "next":
-                    if self.index == var.runs - 1:
-                        print("index max returned")
-                        return
-                    else:
-                        sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index + 1, sim.visLimits, fromUI = True)
-                        self.visualizeWidget.canvas.draw()
-                        self.index += 1
-                        
-                elif direction == "prev":
-                    if self.index == 0:
-                        return
-                    else:
-                        sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, self.index - 1, sim.visLimits, fromUI = True)
-                        self.visualizeWidget.canvas.draw()
-                        self.index -= 1 
-            """"""
-            self.index = 0
-            self.visualizeWidget.pushButton_next.clicked.connect(lambda: visualizePlotIndexer("next"))
-            self.visualizeWidget.pushButton_prev.clicked.connect(lambda: visualizePlotIndexer( "prev"))
-            
+            self.visualizeWidget.adjustAxes(self.var.dimensions)
 
             """Init draw (draw first run)"""
-            sim.visualizeDrawOnAxis(var.dimensions, self.visualizeWidget.canvas.axes, 0, sim.visLimits, fromUI = True)
+            self.sim.visualizeDrawOnAxis(self.var.dimensions, self.visualizeWidget.canvas.axes, 0, self.sim.visLimits, fromUI = True)
             self.visualizeWidget.canvas.draw()
             
-
-            
+      
     def readValues(self):
         """
         Convert tables to arrays and transfer arrays + settings to 
         var.py for sim to read
         """
-        print("connected")
         votercount = self.voterWidget.tabWidget.currentWidget().voterTable.rowCount()
         dimensions = self.voterWidget.tabWidget.currentWidget().options.dimensions
         
@@ -378,7 +392,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         statusQuoPosition, statusQuoDrift, voterNames, voterRoles, voterPositions,\
         randomAgendaSetter, randomVetoPlayer = self.voterWidget.tabWidget.currentWidget().returnInitArrays()
-        
+                
         customRoleArray = self.voterWidget.tabWidget.currentWidget().customRoleArray
 
         directory = None
@@ -636,10 +650,11 @@ class GameTable(QtWidgets.QWidget):
         self.voterTable.setHorizontalHeaderLabels(["Name", "Agenda Setter", "Veto Player"] + 
                                                   ["Dim" + str(dim + 1) for dim in range(dimInit)])
         
-        self.statusQuoTable = TableWidget()
+        self.statusQuoTable = QtWidgets.QTableWidget()
         self.statusQuoTable.setColumnCount(dimInit)
         self.statusQuoTable.setRowCount(2)
-        self.statusQuoTable.setHorizontalHeaderLabels(["Dim" + str(dim + 1) for dim in range(dimInit)])        
+        self.statusQuoTable.setHorizontalHeaderLabels(["Dim" + str(dim + 1) for dim in range(dimInit)])      
+        self.statusQuoTable.setVerticalHeaderLabels(["Position", "Drift"])
 
     def __layout__(self):
         splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
@@ -672,7 +687,8 @@ class GameTable(QtWidgets.QWidget):
                         "runs" : self.options.runs,
                         "save" : self.options.save,
                         "visualize" : self.options.visualize,
-                        "savevisualize" : self.options.savevisualize
+                        "savevisualize" : self.options.savevisualize,
+                        "method" : self.options.method
                         }
                 }
         
@@ -722,11 +738,12 @@ class GameTable(QtWidgets.QWidget):
                                                       ["Dim" + str(dim + 1) for dim in 
                                                        range(len(seq["voters"]["positions"][0]))])
             
-            self.statusQuoTable = TableWidget()
+            self.statusQuoTable = QtWidgets.QTableWidget()
             self.statusQuoTable.setColumnCount(len(seq["statusquo"]["position"]))
             self.statusQuoTable.setRowCount(2)
             self.statusQuoTable.setHorizontalHeaderLabels(["Dim" + str(dim + 1) for dim in 
-                                                           range(len(seq["statusquo"]["position"]))]) 
+                                                           range(len(seq["statusquo"]["position"]))])
+            self.statusQuoTable.setVerticalHeaderLabels(["Position", "Drift"])
             
             """Names"""
             if "names" in seq["voters"]:
@@ -776,23 +793,34 @@ class GameTable(QtWidgets.QWidget):
             return
             
     def returnInitArrays(self):
-        statusQuoPosition = np.array([[float(self.statusQuoTable.item(0, dim).text()) for dim in range(self.statusQuoTable.columnCount())]])
-        statusQuoDrift = np.array([[float(self.statusQuoTable.item(1, dim).text()) for dim in range(self.statusQuoTable.columnCount())]])
-
-        voterNames = [self.voterTable.item(row, 0).text() for row in range(self.voterTable.rowCount())]
+        """Status Quo Values"""
+        try:
+            statusQuoPosition = [float(self.statusQuoTable.item(0, dim).text()) for dim in range(self.statusQuoTable.columnCount())]
+        except ValueError:
+            warnings.warn("Value Error - Wrong Status Quo Position input")
+            raise
         
+        try:
+            statusQuoDrift = np.array([[float(self.statusQuoTable.item(1, dim).text()) for dim in range(self.statusQuoTable.columnCount())]])
+        except ValueError:
+            warnings.warn("Value Error - Wrong Status Quo Drift input")
+            statusQuoDrift = None
+        
+        """Voter Values"""        
+        voterNames = [self.voterTable.item(row, 0).text() for row in range(self.voterTable.rowCount())]
+
         randomAgendaSetter = False
         randomVetoPlayer = False
         
-        if "random" in self.voterTable.item(0, 1).text() and not "random" in self.voterTable.item(0, 2).text():
+        if "random" in self.voterTable.item(0, 1).text() and not "random" in self.voterTable.item(0, 2).text().lower():
             randomAgendaSetter = True
             voterRoles = [0 if not self.toBool(self.voterTable.item(row, 2).text()) else 1 for row in range(self.voterTable.rowCount())]
 
-        elif "random" in self.voterTable.item(0, 2).text() and not "random" in self.voterTable.item(0, 1).text():
+        elif "random" in self.voterTable.item(0, 2).text() and not "random" in self.voterTable.item(0, 1).text().lower():
             randomVetoPlayer = True
             voterRoles = [0 if not self.toBool(self.voterTable.item(row, 1).text()) else 2 for row in range(self.voterTable.rowCount())]
             
-        elif "random" in self.voterTable.item(0, 1).text() and "random" in self.voterTable.item(0, 2).text():
+        elif "random" in self.voterTable.item(0, 1).text() and "random" in self.voterTable.item(0, 2).text().lower():
             randomAgendaSetter = True
             randomVetoPlayer = True
             voterRoles = None
@@ -800,10 +828,14 @@ class GameTable(QtWidgets.QWidget):
         else:
             voterRoles = [0 if not self.toBool(self.voterTable.item(row, 1).text()) and not self.toBool(self.voterTable.item(row, 2).text())
             else 2 if self.toBool(self.voterTable.item(row, 1).text()) else 1 for row in range(self.voterTable.rowCount())]
-
-        voterPositions = [[float(self.voterTable.item(row, col + 3).text()) for col in range(self.voterTable.columnCount() - 3)]
-        for row in range(self.voterTable.rowCount())]
-        
+    
+        try:
+            voterPositions = [[float(self.voterTable.item(row, col + 3).text()) for col in range(self.voterTable.columnCount() - 3)]
+            for row in range(self.voterTable.rowCount())] 
+        except ValueError:
+            warnings.warn("Value Error - wrong Voter Position input")
+            raise
+    
         return statusQuoPosition, statusQuoDrift, voterNames, voterRoles, voterPositions, randomAgendaSetter, randomVetoPlayer
 
 
@@ -826,7 +858,7 @@ class GameTableOptions:
             self.runs = settings["runs"]
             self.dimensions = settings["dimensions"]
             self.breaks = settings["breaks"]
-#            self.method = settings["method"]
+            self.method = settings["method"]
             self.save = settings["save"]
             self.visualize = settings["visualize"]
             self.alterPreferences = settings["alterPreferences"]
@@ -844,8 +876,6 @@ class OptionsWidget(QtWidgets.QWidget):
         self.__layout__()
 
     def __setup__(self):
-#        self.listWidget_selection = QtWidgets.QListWidget()
-#        self.listWidget_selection.addItems(["General", "Run", "Visualization", "Advanced"])
         self.generalOptions = GeneralOptions()
         self.runOptions = RunOptions()
         self.visualizationOptions = VisualizeOptions()
@@ -855,40 +885,13 @@ class OptionsWidget(QtWidgets.QWidget):
         self.tabWidget.addTab(self.runOptions, "Run")
         self.tabWidget.addTab(self.visualizationOptions, "Visualization")
         
-#        self.tabWidget.setTabPosition(1)
-
         self.tabWidget.setTabPosition(0)
-#        self.advancedOptions = AdvancedOptions()
 
-#        self.optionsIndex = [self.generalOptions, self.runOptions, self.visualizationOptions, self.advancedOptions]
-
-#        self.listWidget_selection.currentItemChanged.connect(self.__setIndex__)
 
     def __layout__(self):
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(self.tabWidget)
         self.setLayout(layout)
-#        hbox = QtWidgets.QHBoxLayout()
-#        
-#        splitter = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
-#        splitter.addWidget(self.listWidget_selection)
-#        
-#        splitter.addWidget(self.generalOptions)
-#        splitter.addWidget(self.runOptions)
-#        splitter.addWidget(self.visualizationOptions)
-#        splitter.addWidget(self.advancedOptions)
-#        
-#        self.generalOptions.hide()
-#        self.visualizationOptions.hide()
-#        self.advancedOptions.hide()
-#        self.runOptions.hide()
-        
-#        splitter.setStretchFactor(0, 1)
-#        splitter.setStretchFactor(1, 1)
-        
-#        hbox.addWidget(splitter)
-#        self.setLayout(hbox)
-        pass
         
     def __setIndex__(self, current, previous):
         """
@@ -908,11 +911,11 @@ class OptionsWidget(QtWidgets.QWidget):
         self.runOptions.spinBox_dimensions.setValue(GameTableOptions.dimensions)
         self.runOptions.doubleSpinBox_breaks.setValue(GameTableOptions.breaks)
         
-#        """method"""
-#        if GameTableOptions.method == "grid":
-#            self.runOptions.radioButton_pointGrid.setChecked(True)
-#        else:
-#            self.runOptions.radioButton_optimization.setChecked(True)
+        """method"""
+        if GameTableOptions.method == "grid":
+            self.runOptions.radioButton_pointGrid.setChecked(True)
+        else:
+            self.runOptions.radioButton_optimization.setChecked(True)
         
         """save"""
         if GameTableOptions.save == "yes":

@@ -19,7 +19,7 @@ import matplotlib.lines as mlines
 from shapely.geometry import Point, LinearRing
 from scipy.spatial import distance as dist
 import copy
-logging.basicConfig(filename = "vblog.log", level = logging.DEBUG)
+#logging.basicConfig(filename = "vblog.log", level = logging.DEBUG)
 
 class Simulation():
     def __init__(self, Variables, parent = None):
@@ -77,7 +77,6 @@ class Simulation():
         """if shapely, initialize shapely objects for each voter"""
         if self.Variables.method == "optimization":
             self.winsetPatches = []
-#            from shapely.geometry import LineString, Point, LinearRing
             
 #            self.voterPoints = [Point(position) for position in self.Variables.voterPositions[:, 0, :]]
 #            self.voterCircles = [point.buffer(point.distance(self.statusQuo[0])) for point in self.voterPoints]
@@ -117,6 +116,7 @@ class Simulation():
             
             """determine possible coalitions given a selected majority rule -- coalitions necessarily include veto players and agenda setter"""
             possibleCoalitions = self.determineCoalitions(agendaSetterIndex, vetoPlayerIndex, normalPlayerIndex)
+            print("possible coal", possibleCoalitions)
             #TODO from coalition grid search to function
             possibleOutcomes = []
             
@@ -125,7 +125,7 @@ class Simulation():
                 """grid index to make grid a square around agenda setter radius"""
                 gridIndex = [[self.voterPositionArray[agendaSetterIndex, run].item(dim) - self.voterRadiusArray[agendaSetterIndex, run].item(0) for
                               dim in range(self.Variables.dimensions)], [self.voterPositionArray[agendaSetterIndex, run].item(dim) + 
-                    self.voterRadiusArray.item(0) for dim in range(self.Variables.dimensions)]]
+                    self.voterRadiusArray[agendaSetterIndex, run].item(0) for dim in range(self.Variables.dimensions)]]
                 
                 pointGrid = self.gridPaint(*gridIndex, self.Variables.breaks, self.breakDecimal)
                 
@@ -137,8 +137,9 @@ class Simulation():
                     """select outcomes for all coalitions"""
                     for coalition in possibleCoalitions:
                         pointsInWinset = self.gridPointsInWinset(pointGrid, self.statusQuo[[run]], np.vstack([self.voterPositionArray[coalition, run]]))
-                        possibleOutcome = self.gridClosestToAgendaSetter(pointsInWinset, agendaSetterIndex, run)
+                        possibleOutcome = self.gridClosestToAgendaSetter(points_in_selection = pointsInWinset, as_index = agendaSetterIndex, run = run)
                         possibleOutcomes.append(possibleOutcome)   
+    
                 else:
                     possibleOutcomes.append(self.gridClosestToAgendaSetter(pointGrid, agendaSetterIndex, run))
                     
@@ -151,12 +152,14 @@ class Simulation():
                     self.outcomes[run] = possibleOutcomes[0]
                             
             else:
+                print("optimize")
                 statusQuoPoint = Point(self.statusQuo[run])
                 voterPoints = [Point(position) for position in self.voterPositionArray[:, run, :]]
                 voterCircles = [point.buffer(point.distance(statusQuoPoint)) for point in voterPoints]
                 
                 winsets = []
                 if possibleCoalitions:
+                    print("possible coal --- ", possibleCoalitions)
                     for coalition in possibleCoalitions:
                         intersection = voterCircles[agendaSetterIndex.item()]
 #                        intersection = [voterCircles[index] for index in agendaSetterIndex][0]
@@ -190,10 +193,11 @@ class Simulation():
                     else:
                         closestPoints.append(self.statusQuo[run].tolist())
                     
-                closestPointsDistances = [self.determineDistance(self.statusQuo[[run]], np.array([point])) for point in closestPoints]
-                minIndex = np.argmin(closestPointsDistances)
                 
+                closestPointsDistances = [self.determineDistance(self.voterPositionArray[agendaSetterIndex, run], np.array([point])) for point in closestPoints]
+                minIndex = np.argmin(closestPointsDistances)
                 self.outcomes[run] = closestPoints[minIndex]
+
                 
                 if self.Variables.visualize:
                     if np.all(self.outcomes[run] != self.statusQuo[run]):
@@ -213,7 +217,6 @@ class Simulation():
             """alter status quo and preferences"""
             if self.Variables.runs > 1 and run != self.Variables.runs - 1:
                 print("call alter poss")
-                print(run)
                 self.alterStatusQuo(run)
                 #original passed on "self.outcomes[[run]])"
                 self.alterPlayerPreferences(run)
@@ -234,7 +237,7 @@ class Simulation():
         (if any) voters are needed besides the veto players and the agenda setter 
         (which are always required to vote for a proposal) and creates all possible combinations thereof
         """
-        requiredVoters = agendaSetter + vetoPlayers
+        requiredVoters = agendaSetter.tolist() + vetoPlayers.tolist()
         # check if veto players and the agenda setter are a majority by themselves
         if len(requiredVoters) <= 0.5 * self.Variables.votercount:
             #determine how many more voters are needed
@@ -302,7 +305,8 @@ class Simulation():
         status quo.
         """
         #if there are no points inside all preference circles, the outcome will be the status quo
-        if points_in_selection.size == 0:
+        if not points_in_selection.any():
+            print("no points in inp")
             preferred_point = self.statusQuo[run].tolist()
         else:
             # determine the distance of each eligible point to the agenda setter
@@ -312,7 +316,7 @@ class Simulation():
             # retrieve the index of minimum distance and get the actual point value
             index = np.where(distance == distance.min())
             # currently, only the first value is used. for games with 0 agenda setter better system needed
-            preferred_point = points_in_selection[index[0][0]]
+            preferred_point = np.array([points_in_selection[index[0][0]]])
             
         return preferred_point
             
@@ -574,16 +578,22 @@ class Simulation():
             ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s = 30, c = "#ff7f0e", label = "Outcome")
             
             """add precise winset patch"""
-            if self.Variables.method == "optimization" and self.winsetPatches[run] is not None:
-                print("add winset patch")
-                if not fromUI:
-                    ax.add_collection(self.winsetPatches[run])
-                else:
-                    UI_winsetPatch = copy.copy(self.winsetPatches[run])
-                    UI_winsetPatch.axes = None
-                    UI_winsetPatch.figure = None
-                    UI_winsetPatch.set_transform(ax.transData)
-                    ax.add_collection(UI_winsetPatch)
+            try:
+                print(run)
+                print(self.winsetPatches)
+                if self.Variables.method == "optimization" and self.winsetPatches[run] is not None:
+                    print("add winset patch")
+                    if not fromUI:
+                        ax.add_collection(self.winsetPatches[run])
+                    else:
+                        UI_winsetPatch = copy.copy(self.winsetPatches[run])
+                        UI_winsetPatch.axes = None
+                        UI_winsetPatch.figure = None
+                        UI_winsetPatch.set_transform(ax.transData)
+                        ax.add_collection(UI_winsetPatch)
+            except:
+                print("except")
+                pass
             
             #trace status quo
             if self.Variables.trace is True:
