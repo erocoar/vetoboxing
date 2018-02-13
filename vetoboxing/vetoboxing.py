@@ -8,60 +8,28 @@ Created on Thu Oct 19 00:55:58 2017
 import sys
 import os
 import warnings
+import re
 import json
 import errno
 import time
 import numpy as np
 import random
+import pandas as pd
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5 import NavigationToolbar2QT as NavigationToolbar
 from PyQt5 import QtCore, QtWidgets, QtGui
+import traceback
+sys.excepthook = traceback.print_exception
+ 
+def excepthook(type_, value, tback):
+    sys.__excepthook__(type_, value, tback)
+    print(type_,value,sep="--")
+    
+sys.excepthook = excepthook
 
 _DOCK_OPTS = QtWidgets.QMainWindow.AnimatedDocks | QtWidgets.QMainWindow.AllowNestedDocks | \
              QtWidgets.QMainWindow.AllowTabbedDocks
-
-
-class GameTableOptions:
-    def __init__(self, from_load: bool = False, settings: object = None) -> object:
-        if from_load is False:
-            """Run"""
-            self.runs = 1
-            self.dimensions = 2
-            self.method = "grid"
-            self.save = "yes"
-            self.visualize = "yes"
-            self.alter_preferences = "no"
-            self.alter_statusquo = "history+drift"
-            self.distribution = "uniform"
-            self.save_visualize = "no"
-
-            """Advanced Run"""
-            self.breaks = 0.01
-            self.density = 1
-            self.distance_type = "euclidean"
-            self.sq_vibration_distribution = "uniform"
-            self.vibrate_sq = "no"
-
-        else:
-            """Run"""
-            self.runs = settings["runs"]
-            self.dimensions = settings["dimensions"]
-            self.method = settings["method"]
-            print(self.method)
-            self.save = settings["save"]
-            self.visualize = settings["visualize"]
-            self.alter_preferences = settings["alter_preferences"]
-            self.alter_statusquo = settings["alter_statusquo"]
-            self.save_visualize = settings["save_visualize"]
-            
-            """Advanced Run"""
-            self.density = settings["density"]
-            self.breaks = settings["breaks"]
-            self.distance_type = settings["distance_type"]
-            self.sq_vibration_distribution = settings["sq_vibration_distribution"]
-            self.vibrate_sq = settings["vibrate_sq"]
-
 
 class MainWindow(QtWidgets.QMainWindow):
     """
@@ -140,8 +108,9 @@ class MainWindow(QtWidgets.QMainWindow):
         plot_action.triggered.connect(self.show_plot)
 
         clear_action = QtWidgets.QAction(QtGui.QIcon("./assets/iconClear.png"), "Clear All", self)
-        clear_action.setShortcut("Ctrl+C")
-        clear_action.triggered.connect(lambda: self.visualizeWidget.adjust_axes(2))
+#        clear_action.setShortcut("Ctrl+C")
+        clear_action.triggered.connect(lambda _: [self.voterWidget.tabWidget.currentWidget().voter_table.setRowCount(0),
+                                                  self.voterWidget.tabWidget.currentWidget().voter_table.setRowCount(3)])
 
         stretcher = QtWidgets.QWidget()
         stretcher.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -162,33 +131,57 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def load(self):
         options = None
+        loadCSV = False
+        loadJSON = False
+        
+        filetype = ""
 
-        file = QtWidgets.QFileDialog.getOpenFileName(filter="Text Files (*.txt)")
-
+        file = QtWidgets.QFileDialog.getOpenFileName(filter="JSON Files (*.json);;CSV Files (*.csv)")
+        
         if file[0]:
-            with open(file[0]) as sequence:
-                seq = json.load(sequence)
+            if ".csv" in file[0]:
+                loadCSV = True
+            else:
+                loadJSON = True
         else:
             return
 
-        if "run_settings" in seq:
-            try:
-                options = GameTableOptions(from_load=True, settings=seq["run_settings"])
-            except KeyError:
-                warnings.warn("Can't read settings -- invalid keys")
+        if loadJSON:
+            with open(file[0]) as sequence:
+                seq = json.load(sequence)
 
-        if "voters" and "statusquo" in seq or "sequence" in seq:
-            self.voterWidget.load_table(seq, options)
+            if "run_settings" in seq:
+                try:
+                    options = GameTableOptions(from_load=True, settings=seq["run_settings"])
+                except KeyError:
+                    warnings.warn("Key Error. Can't read run-settings -- invalid keys")
+    
+            if "voters" and "statusquo" in seq or "sequence" in seq:
+                self.voterWidget.load_table(seq, options)
+    
+            if "visualization_settings" in seq:
+                self.optionsWidget.load_options(seq["visualization_settings"])
+                
+        else:
+            df = pd.read_csv(file[0])
+            voterdims = df.filter(regex="Voter.*DIM")
+            maxdim = max([int(re.search(r"DIM-(\d)", col).groups()[0]) for col in voterdims.columns])
+            votercount = int(len(voterdims.columns)/maxdim)
+            voterdims = voterdims.as_matrix()
+#            custom_position_array = np.vstack([voterdims.as_matrix()[:, i-2:i] for i in range(2, voterdims.shape[1], 2)]).reshape(votercount,-1,maxdim)
+            custom_position_array = voterdims.reshape(voterdims.shape[0], -1, maxdim).swapaxes(0, 1)
+            self.voterWidget.load_table(custom_position_array, filetype="CSV")
+#            custom_role_array = test.filter(regex="Voter.*ROLE").astype(int).as_matrix()
 
-        if "visualization_settings" in seq:
-            self.optionsWidget.load_options(seq["visualization_settings"])
+            
+            
 
     def save(self):
-        file = str(QtWidgets.QFileDialog.getExistingDirectory(self, "Select Directory"))
-
-        if not file:
+        file = QtWidgets.QFileDialog.getSaveFileName(self, "Save File", None, "JSON files (*.json)")[0]
+        
+        if not file[0]:
             return
-
+        
         run_options = self.voterWidget.tabWidget.currentWidget().save_options()
         other_options = self.optionsWidget.save_options()
         tables = self.voterWidget.tabWidget.currentWidget().save_table()
@@ -199,7 +192,7 @@ class MainWindow(QtWidgets.QMainWindow):
 #        out1.update(tables)
         out = dict(**run_options, **other_options, **tables)
 
-        with open(os.path.join(file, "save.txt"), "w") as outfile:
+        with open(file, "w") as outfile:
             json.dump(out, outfile)
 
     def show_preference_window(self):
@@ -253,11 +246,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.preferencesDock.hide()
 
         self.logWidget = LogDockWidget(self)
+#        self.logWidget = OutLog()
         self.logDock = QtWidgets.QDockWidget()
         self.logDock.setWindowTitle("Log")
         self.logDock.setWidget(self.logWidget)
         self.addDockWidget(QtCore.Qt.RightDockWidgetArea, self.logDock)
-        self.logWidget.append("Init")
 
         self.visualizeWidget = VisualizeDockWidget(self)
         #        self.visualizeWidget = VisualizeCanvas(self)
@@ -271,6 +264,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         #        self.voterWidget.tabWidget.currentChanged.connect(self.voterWidget.__addTab__)
         self.voterWidget.tabWidget.currentChanged.connect(self.tabwidget_changed_connect)
+        
+#        sys.stderr = self.logWidget #TODO a
+#        sys.stdout = self.logWidget
 
     def initialize_connections(self):
         """
@@ -357,7 +353,6 @@ class MainWindow(QtWidgets.QMainWindow):
                                                   self.optionsWidget.advanced_run_options.
                                                   doubleSpinBox_breaks.value()))
 
-        # TODO catch error here when no game is connected
         self.visualizeWidget.pushButton_next.clicked.connect(self.plot_window_forward)
         self.visualizeWidget.pushButton_prev.clicked.connect(self.plot_window_backward)
 
@@ -409,10 +404,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def plot_window_forward(self):
         try:
-            if self.index == self.var.runs - 1:
+            if self.index == self.options.runs - 1:
                 return
             else:
-                self.sim.visualize_draw_on_axis(self.var.dimensions, self.visualizeWidget.canvas.axes, self.index + 1,
+                self.sim.visualize_draw_on_axis(self.options.dimensions, self.visualizeWidget.canvas.axes, self.index + 1,
                                                 self.sim.visualize_limits, fromUI=True)
                 self.index += 1
                 self.visualizeWidget.canvas.draw()
@@ -424,7 +419,7 @@ class MainWindow(QtWidgets.QMainWindow):
             if self.index == 0:
                 return
             else:
-                self.sim.visualize_draw_on_axis(self.var.dimensions, self.visualizeWidget.canvas.axes, self.index - 1,
+                self.sim.visualize_draw_on_axis(self.options.dimensions, self.visualizeWidget.canvas.axes, self.index - 1,
                                                 self.sim.visualize_limits, fromUI=True)
                 self.index -= 1
                 self.visualizeWidget.canvas.draw()
@@ -432,48 +427,38 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
     def run_simulation(self):
-        try:
-            self.var = self.read_values()
-
-        except ValueError:
-            return
-
-        except AttributeError:
-            return
-
-        except:
-            raise
+        self.options, visualization_options = self.read_values()
 
         self.index = 0
         to_ui_plot = False
 
         import simulation as vb
 
-        self.sim = vb.Simulation(self.var, self)
+        self.sim = vb.Simulation(self.options, visualization_options, self)
         self.sim.simulation()
 
-        if self.var.visualize == "yes" and self.var.save_visualize == "yes":
+        if self.options.visualize == "yes" and self.options.save_visualize == "yes":
             self.sim.visualize_init(save=True)
             to_ui_plot = True
 
-        elif self.var.visualize == "no" and self.var.save_visualize == "yes":
+        elif self.options.visualize == "no" and self.options.save_visualize == "yes":
             self.sim.visualize_init(save=True)
 
-        elif self.var.visualize == "yes" and self.var.save_visualize == "no":
+        elif self.options.visualize == "yes" and self.options.save_visualize == "no":
             self.sim.visualize_init(save=False)
             to_ui_plot = True
 
         if to_ui_plot is True:
-            self.visualizeWidget.adjust_axes(self.var.dimensions)
+            self.visualizeWidget.adjust_axes(self.options.dimensions, visualization_options.plot_total_change)
 
             """Init draw (draw first run)"""
-            self.sim.visualize_draw_on_axis(self.var.dimensions, self.visualizeWidget.canvas.axes, 0,
+            self.sim.visualize_draw_on_axis(self.options.dimensions, self.visualizeWidget.canvas.axes, 0,
                                             self.sim.visualize_limits, fromUI=True)
             self.visualizeWidget.canvas.draw()
             
     @staticmethod
     def to_bool(item):
-        if str(item.lower()) == "yes":
+        if str(item).lower() == "yes":
             return True
         else:
             return False
@@ -503,14 +488,18 @@ class MainWindow(QtWidgets.QMainWindow):
         sq_vibration_distribution = self.voterWidget.tabWidget.currentWidget().options.sq_vibration_distribution
         vibrate_sq = self.voterWidget.tabWidget.currentWidget().options.vibrate_sq
 
-        statusquo_position, statusquo_drift, voter_names, voter_roles, voter_positions, \
-        random_agenda_setter, random_veto_player = self.voterWidget.tabWidget.currentWidget().return_init_arrays()
+        try:
+            statusquo_position, statusquo_drift, voter_names, voter_roles, voter_positions, \
+            random_agenda_setter, random_veto_player = self.voterWidget.tabWidget.currentWidget().return_init_arrays()
+        except:
+            raise
 
         if statusquo_drift is None and alter_statusquo == "history+drift":
             warnings.warn("No Status Quo Drift specified, but History+Drift selected")
             raise ValueError("No Status Quo Drift specified, but History+Drift selected")
 
         custom_role_array = self.voterWidget.tabWidget.currentWidget().custom_role_array
+        custom_position_array = self.voterWidget.tabWidget.currentWidget().custom_position_array
 
         directory = None
 
@@ -522,6 +511,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.create_dir(parent_dir)
                 results_dir = self.results_dir(model_number, dimensions, runs, parent_dir)
                 directory = results_dir
+                
+                
+        """
+        Visualization Options
+        """
+        vis_options = self.optionsWidget.visualization_options.return_visualization_options()
 
         return SimulationVariables(votercount=votercount, 
                                    runs=runs, breaks=breaks, 
@@ -543,8 +538,9 @@ class MainWindow(QtWidgets.QMainWindow):
                                    random_veto_player=random_veto_player, 
                                    method=method,
                                    custom_role_array=custom_role_array,
+                                   custom_position_array=custom_position_array,
                                    save_visualize=save_visualize, 
-                                   vibrate_sq = self.to_bool(vibrate_sq))
+                                   vibrate_sq=self.to_bool(vibrate_sq)), vis_options
 
     @staticmethod
     def set_model_number(alter_statusquo, alter_preferences):
@@ -602,6 +598,11 @@ class VoterSetup(QtWidgets.QWidget):
     def __init__(self, parent, init_dim):
         super(VoterSetup, self).__init__(parent)
         self.fromLoadAdd = False
+        """randomize_player variables for static  random roles INSIDE ui"""
+        self.randomize_agenda_setter = False
+        self.randomize_veto_player = False
+        
+        """set_random_state_player variables for random roles IN SIMULATION"""
         self.set_random_agenda_setter = False
         self.set_random_veto_player = False
 
@@ -610,10 +611,12 @@ class VoterSetup(QtWidgets.QWidget):
         self.setup_toolbar()
 
         self.set_layout()
+        
+        self.visualization_options = None #TODO a
 
     def setup_toolbar(self):
         self.toolbar = QtWidgets.QToolBar()
-        self.toolbar.setIconSize(QtCore.QSize(14, 14))
+        self.toolbar.setIconSize(QtCore.QSize(15, 15))
 
         stretcher = QtWidgets.QWidget()
         stretcher.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
@@ -625,6 +628,12 @@ class VoterSetup(QtWidgets.QWidget):
         add_action = QtWidgets.QAction(QtGui.QIcon("./assets/iconAdd.png"), "Add Voter", self)
         add_action.setShortcut("Ctrl+A")
         add_action.triggered.connect(self.add_voter_table_row)
+        
+        self.set_random_as_action = QtWidgets.QAction(QtGui.QIcon("./assets/iconAS_rnd.png"), "Random Agenda Setter", self)
+        self.set_random_veto_action = QtWidgets.QAction(QtGui.QIcon("./assets/iconVP_rnd.png"), "Random Veto Player", self)
+
+        self.set_random_as_action.triggered.connect(lambda: self.set_random_player_states("agendasetter", "set_to_random"))  
+        self.set_random_veto_action.triggered.connect(lambda: self.set_random_player_states("vetoplayer", "set_to_random"))
 
         randomize_action = QtWidgets.QAction(QtGui.QIcon("./assets/iconRandom.png"), "Random Roles", self)
         randomize_action.setShortcut("Ctrl+R")
@@ -635,16 +644,19 @@ class VoterSetup(QtWidgets.QWidget):
 
         self.random_veto_action = QtWidgets.QAction(QtGui.QIcon("./assets/iconVeto.png"),
                                                     "Select Random Veto Player(s)", self)
-        self.random_veto_action.triggered.connect(lambda: self.set_random_player_states("vetoplayer"))
+        self.random_veto_action.triggered.connect(lambda: self.set_random_player_states("vetoplayer", "randomize"))
 
         self.random_agenda_setter_action = QtWidgets.QAction(QtGui.QIcon("./assets/iconAS"),
                                                              "Select Random Agenda Setter", self)
 
-        self.random_agenda_setter_action.triggered.connect(lambda: self.set_random_player_states("agendasetter"))
+        self.random_agenda_setter_action.triggered.connect(lambda: self.set_random_player_states("agendasetter", "randomize"))
 
         self.toolbar.addAction(add_action)
         self.toolbar.addSeparator()
         self.toolbar.addAction(clear_action)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.set_random_as_action)
+        self.toolbar.addAction(self.set_random_veto_action)
 
         self.toolbar.addWidget(stretcher)
 
@@ -654,24 +666,49 @@ class VoterSetup(QtWidgets.QWidget):
         self.toolbar.addSeparator()
         self.toolbar.addAction(randomize_action)
 
-    def set_random_player_states(self, player):
-        if player == "agendasetter":
-            if self.set_random_agenda_setter is False:
-                self.set_random_agenda_setter = True
-                self.random_agenda_setter_action.setIcon(QtGui.QIcon("./assets/iconASTriggered.png"))
+    def set_random_player_states(self, player, method):
+        if method == "randomize":
+            if player == "agendasetter":
+                if self.randomize_agenda_setter is False:
+                    self.randomize_agenda_setter = True
+                    self.random_agenda_setter_action.setIcon(QtGui.QIcon("./assets/iconASTriggered.png"))
+                else:
+                    self.randomize_agenda_setter = False
+                    self.random_agenda_setter_action.setIcon(QtGui.QIcon("./assets/iconAS.png"))
             else:
-                self.set_random_agenda_setter = False
-                self.random_agenda_setter_action.setIcon(QtGui.QIcon("./assets/iconAS.png"))
-        else:
-            if self.set_random_veto_player is False:
-                self.set_random_veto_player = True
-                self.random_veto_action.setIcon(QtGui.QIcon("./assets/iconVetoTriggered.png"))
-            else:
-                self.set_random_veto_player = False
-                self.random_veto_action.setIcon(QtGui.QIcon("./assets/iconVeto.png"))
+                if self.randomize_veto_player is False:
+                    self.randomize_veto_player = True
+                    self.random_veto_action.setIcon(QtGui.QIcon("./assets/iconVetoTriggered.png"))
+                else:
+                    self.randomize_veto_player = False
+                    self.random_veto_action.setIcon(QtGui.QIcon("./assets/iconVeto.png"))
+                    
+        elif method == "set_to_random":
+            if player == "agendasetter":
+                if self.set_random_agenda_setter is False:
+                    self.set_random_agenda_setter = True
+                    self.set_random_as_action.setIcon(QtGui.QIcon("./assets/iconAS_rndTriggered.png"))
+                    self.tabWidget.currentWidget().voter_table.setItem(0, 1, QtWidgets.QTableWidgetItem("random"))
+                    
+                else:
+                    self.set_random_agenda_setter = False
+                    self.set_random_as_action.setIcon(QtGui.QIcon("./assets/iconAS_rnd.png"))
+                    self.tabWidget.currentWidget().voter_table.setItem(0, 1, QtWidgets.QTableWidgetItem(""))
+                    
+            if player == "vetoplayer":
+                if self.set_random_veto_player is False:
+                    self.set_random_veto_player = True
+                    self.set_random_veto_action.setIcon(QtGui.QIcon("./assets/iconVP_rndTriggered.png"))
+                    self.tabWidget.currentWidget().voter_table.setItem(0, 2, QtWidgets.QTableWidgetItem("random"))
+                    
+                else:
+                    self.set_random_veto_player = False
+                    self.set_random_veto_action.setIcon(QtGui.QIcon("./assets/iconVP_rnd.png"))
+                    self.tabWidget.currentWidget().voter_table.setItem(0, 2, QtWidgets.QTableWidgetItem(""))
+                
 
     def random_roles(self):
-        if self.set_random_agenda_setter:
+        if self.randomize_agenda_setter:
             """clear row first"""
             [self.tabWidget.currentWidget().voter_table.setItem(row, 1, None)
              for row in range(self.tabWidget.currentWidget().voter_table.rowCount())]
@@ -681,13 +718,13 @@ class VoterSetup(QtWidgets.QWidget):
             self.tabWidget.currentWidget().voter_table.setItem(random_agenda_setter, 1,
                                                                QtWidgets.QTableWidgetItem("True"))
 
-        if self.set_random_veto_player:
+        if self.randomize_veto_player:
             """clear row"""
             [self.tabWidget.currentWidget().voter_table.setItem(row, 2, None)
              for row in range(self.tabWidget.currentWidget().voter_table.rowCount())]
 
             """select rnd indexes"""
-            if self.set_random_agenda_setter:
+            if self.randomize_agenda_setter:
                 random_veto_player_sample = [i for i in range(self.tabWidget.currentWidget().voter_table.rowCount()) if
                                              i != random_agenda_setter]
             else:
@@ -704,8 +741,8 @@ class VoterSetup(QtWidgets.QWidget):
                  random_veto_players]
 
         """fill remainder with false"""
-        for col in [index for index in [1 * self.set_random_agenda_setter,
-                                        2 * self.set_random_veto_player] if index != 0]:
+        for col in [index for index in [1 * self.randomize_agenda_setter,
+                                        2 * self.randomize_veto_player] if index != 0]:
             for row in range(self.tabWidget.currentWidget().voter_table.rowCount()):
                 if self.tabWidget.currentWidget().voter_table.item(row, col) is None:
                     self.tabWidget.currentWidget().voter_table.setItem(row, col, QtWidgets.QTableWidgetItem("False"))
@@ -761,16 +798,22 @@ class VoterSetup(QtWidgets.QWidget):
         for i in range(3):
             self.tabWidget.addTab(GameTable(self, 2), "Test")
 
-    def load_table(self, seq, options=None):
-        if "sequence" in seq:
-            self.tabWidget.currentWidget().custom_role_array = seq["sequence"]
-
+    def load_table(self, seq, options=None, filetype="JSON"):
+        if filetype == "JSON":
+            if "sequence" in seq:
+                self.tabWidget.currentWidget().custom_role_array = np.array(seq["sequence"])
+    
+            else:
+                self.fromLoadAdd = True
+                self.tabWidget.insertTab(self.tabWidget.count() - 1,
+                                         GameTable(self, from_load=True, file=seq, options=options), "Test2")
+                self.tabWidget.setCurrentIndex(self.tabWidget.count() - 2)
+                self.fromLoadAdd = False
+                
         else:
-            self.fromLoadAdd = True
-            self.tabWidget.insertTab(self.tabWidget.count() - 1,
-                                     GameTable(self, from_load=True, file=seq, options=options), "Test2")
-            self.tabWidget.setCurrentIndex(self.tabWidget.count() - 2)
-            self.fromLoadAdd = False
+            print("READING IN SEQ")
+            self.tabWidget.currentWidget().custom_position_array = seq
+            print(self.tabWidget.currentWidget().custom_position_array)
 
 
 class GameTable(QtWidgets.QWidget):
@@ -778,6 +821,7 @@ class GameTable(QtWidgets.QWidget):
         super(GameTable, self).__init__(parent)
 
         self.custom_role_array = None
+        self.custom_position_array = None
 
         if not from_load:
             self.options = GameTableOptions()
@@ -785,10 +829,7 @@ class GameTable(QtWidgets.QWidget):
             self.set_layout()
 
         else:
-            if options:
-                self.options = options
-            else:
-                self.options = GameTableOptions()
+            self.options = options if options else GameTableOptions()
 
             self.load_table(file)
             self.set_layout()
@@ -855,7 +896,8 @@ class GameTable(QtWidgets.QWidget):
         save = {
             "voters": {
                 "votercount": self.voter_table.rowCount(),
-                "names": [self.voter_table.item(row, 0).text() for
+                "names": [self.voter_table.item(row, 0).text() if 
+                          self.voter_table.item(row, 0) is not None else "" for
                           row in range(self.voter_table.rowCount())],
                 "agendasetter": [self.voter_table.item(row, 1).text() for
                                  row in range(self.voter_table.rowCount())],
@@ -943,10 +985,11 @@ class GameTable(QtWidgets.QWidget):
 
     @staticmethod
     def to_bool(item):
-        if str(item.lower()) == "true" or str(item) == "1":
+        assert type(item) is str, "Non-String Input to_bool"
+        if item.lower() == "true" or item == "1":
             return True
         else:
-            return
+            return False
 
     def return_init_arrays(self):
         """Status Quo Values"""
@@ -955,13 +998,11 @@ class GameTable(QtWidgets.QWidget):
             statusquo_position = [float(self.statusquo_table.item(0, dim).text()) for dim in
                                   range(self.statusquo_table.columnCount())]
         except ValueError:
-            warnings.warn("Value Error - Wrong Status Quo Position input")
-            raise
+            raise ValueError("Invalid Status Quo Position specified")
 
         except AttributeError:
-            warnings.warn("Attribute Error - No Status Quo Position specified")
-            raise
-
+            raise AttributeError("No Status Quo Position specified")
+        
         try:
             statusquo_drift = np.array(
                 [[float(self.statusquo_table.item(1, dim).text()) for
@@ -976,54 +1017,51 @@ class GameTable(QtWidgets.QWidget):
             statusquo_drift = None
 
         """Voter Values"""
-        voter_names = [self.voter_table.item(row, 0).text() for row in range(self.voter_table.rowCount())]
-
-        if None in voter_names:
+        try:
+            voter_names = [self.voter_table.item(row, 0).text() for row in range(self.voter_table.rowCount())]
+            
+        except AttributeError:
             warnings.warn("No Voter Names specified")
+            voter_names = ["" for _ in range(self.voter_table.rowCount())]
 
-        random_agendasetter = False
-        random_vetoplayer = False
-
-        if "random" in self.voter_table.item(0, 1).text() and not\
-                        "random" in self.voter_table.item(0, 2).text().lower():
-            random_agendasetter = True
-            voter_roles = [0 if not self.to_bool(self.voter_table.item(row, 2).text()) else 1 for
-                           row in range(self.voter_table.rowCount())]
-
-        elif "random" in self.voter_table.item(0, 2).text() and not "random" in \
-                self.voter_table.item(0, 1).text().lower():
-            random_vetoplayer = True
-            voter_roles = [0 if not self.to_bool(self.voter_table.item(row, 1).text()) else 2 for
-                           row in range(self.voter_table.rowCount())]
-
-        elif "random" in self.voter_table.item(0, 1).text() and "random" in \
-                self.voter_table.item(0, 2).text().lower():
-            random_agendasetter = True
-            random_vetoplayer = True
+        try:
+            agenda_setter_roles = [self.voter_table.item(row, 1).text().lower() for row in range(self.voter_table.rowCount())]
+            veto_player_roles = [self.voter_table.item(row, 2).text().lower()  for row in range(self.voter_table.rowCount())]
+            
+        except AttributeError:
+            raise AttributeError("No Voter Roles specified")    
+                
+        random_agendasetter = True if "random" in agenda_setter_roles else False
+        random_vetoplayer = True if "random" in veto_player_roles else False
+        
+        if random_agendasetter and not random_vetoplayer:
+            voter_roles = [0 if not self.to_bool(veto_role) else 1 for veto_role in veto_player_roles]
+            
+        elif random_vetoplayer and not random_agendasetter:
+            voter_roles = [0 if not self.to_bool(agenda_role) else 2 for agenda_role in agenda_setter_roles]
+            
+        elif random_agendasetter and random_vetoplayer:
             voter_roles = None
-
-        else:
-            voter_roles = [0 if not self.to_bool(self.voter_table.item(row, 1).text()) and not self.to_bool(
-                self.voter_table.item(row, 2).text()) else 2 if
-            self.to_bool(self.voter_table.item(row, 1).text()) else 1 for row in range(self.voter_table.rowCount())]
-
-        print("----", voter_roles)
-        if voter_roles is not None and random_agendasetter is not True:
-            if not 2 in voter_roles:
-                warnings.warn("No Agenda-Setter selected")
+            
+        else:                                  
+            voter_roles = [0 if not self.to_bool(agenda_role) and not self.to_bool(veto_role)
+            else 2 if self.to_bool(agenda_role) else 1 for agenda_role, veto_role in zip(agenda_setter_roles, veto_player_roles)]
+            
+            if voter_roles.count(2) > 1:
+                raise ValueError("Cannot specify more than 1 Agenda Setter")
+                
+            elif not 2 in voter_roles:
                 raise ValueError("No Agenda Setter selected")
-
+                    
         try:
             voter_positions = [
                 [float(self.voter_table.item(row, col + 3).text()) for col in range(self.voter_table.columnCount() - 3)]
                 for row in range(self.voter_table.rowCount())]
         except ValueError:
-            warnings.warn("Value Error - Wrong Voter Position input")
-            raise
+            raise ValueError("Wrong Voter Position Input")
 
         except AttributeError:
-            warnings.warn("Attribute Error - No Voter Positions specified")
-            raise
+            raise AttributeError("No Voter Positions specified")
 
         return statusquo_position, statusquo_drift, \
                voter_names, voter_roles, voter_positions, random_agendasetter, random_vetoplayer
@@ -1042,10 +1080,10 @@ class OptionsWidget(QtWidgets.QWidget):
         self.visualization_options = VisualizeOptions()
 
         self.tab_widget = QtWidgets.QTabWidget()
-        self.tab_widget.addTab(self.general_options, "General")
         self.tab_widget.addTab(self.run_options, "Run")
         self.tab_widget.addTab(self.advanced_run_options, "Advanced Run")
         self.tab_widget.addTab(self.visualization_options, "Visualization")
+        self.tab_widget.addTab(self.general_options, "General")
 
         self.tab_widget.setTabPosition(0)
 
@@ -1601,6 +1639,7 @@ class AdvancedRunOptions(QtWidgets.QWidget):
         self.buttongroup_statusquo_vibration = QtWidgets.QButtonGroup()
         self.radioButton_vibrate_sq_yes = QtWidgets.QRadioButton("Yes")
         self.radioButton_vibrate_sq_no = QtWidgets.QRadioButton("no")
+        self.radioButton_vibrate_sq_no.setChecked(True)
         self.buttongroup_statusquo_vibration.addButton(self.radioButton_vibrate_sq_yes)
         self.buttongroup_statusquo_vibration.addButton(self.radioButton_vibrate_sq_no)
 
@@ -1627,6 +1666,19 @@ class AdvancedRunOptions(QtWidgets.QWidget):
         self.radioButton_distanceManhattan = QtWidgets.QRadioButton("Manhattan")
         self.buttongroup_distance_type.addButton(self.radioButton_distanceEuclidean)
         self.buttongroup_distance_type.addButton(self.radioButton_distanceManhattan)
+        
+        """""""""""
+        Random Veto Players
+        """""""""""
+        self.buttongroup_random_veto_players = QtWidgets.QButtonGroup()
+        self.radioButton_veto_count_random = QtWidgets.QRadioButton("Random")
+        self.radioButton_veto_count_constant = QtWidgets.QRadioButton("Constant")
+        self.radioButton_veto_count_max = QtWidgets.QRadioButton("Upper Limit")
+        self.buttongroup_random_veto_players.addButton(self.radioButton_veto_count_random)
+        self.buttongroup_random_veto_players.addButton(self.radioButton_veto_count_constant)
+        self.buttongroup_random_veto_players.addButton(self.radioButton_veto_count_max)
+        
+        self.spinBox_veto_count = QtWidgets.QSpinBox()
 
     def layout(self):
         layout = QtWidgets.QVBoxLayout(self)
@@ -1683,13 +1735,25 @@ class AdvancedRunOptions(QtWidgets.QWidget):
         group_box_distance_type.setLayout(distance_type_vbox)
 
         layout.addWidget(group_box_distance_type)
+        
+        """""""""""
+        Veto Count
+        """""""""""
+        group_box_veto_count = QtWidgets.QGroupBox("Veto Count")
+        
+        veto_count_hbox = self.radiobutton_setup(
+                [self.radioButton_veto_count_random, self.radioButton_veto_count_constant,
+                 self.radioButton_veto_count_max], 2)
+                
+        group_box_veto_count.setLayout(veto_count_hbox)
+        
+        layout.addWidget(group_box_veto_count)
 
         """Set Layout"""
 
         layout.setAlignment(QtCore.Qt.AlignLeft)
         layout.addStretch(1)
-
-    #        self.setLayout(layout)
+        
 
     @staticmethod
     def spinbox_setup(spin_box, label):
@@ -1785,7 +1849,7 @@ class VisualizeOptions(QtWidgets.QWidget):
         self.lineWidthAgendaSetter_SpinBox.setValue(1)
 
         self.opacityAgendaSetter_SpinBox = QtWidgets.QSpinBox()
-        self.opacityAgendaSetter_SpinBox.setValue(50)
+        self.opacityAgendaSetter_SpinBox.setValue(20)
         self.opacityAgendaSetter_SpinBox.setMaximum(100)
 
         self.sizeAgendaSetter_SpinBox = QtWidgets.QSpinBox()
@@ -1804,7 +1868,7 @@ class VisualizeOptions(QtWidgets.QWidget):
         self.lineWidthVetoPlayer_SpinBox.setValue(1)
 
         self.opacityVetoPlayer_SpinBox = QtWidgets.QSpinBox()
-        self.opacityVetoPlayer_SpinBox.setValue(50)
+        self.opacityVetoPlayer_SpinBox.setValue(20)
         self.opacityVetoPlayer_SpinBox.setMaximum(100)
 
         self.sizeVetoPlayer_SpinBox = QtWidgets.QSpinBox()
@@ -1823,7 +1887,7 @@ class VisualizeOptions(QtWidgets.QWidget):
         self.lineWidthNormalVoter_SpinBox.setValue(1)
 
         self.opacityNormalVoter_SpinBox = QtWidgets.QSpinBox()
-        self.opacityNormalVoter_SpinBox.setValue(50)
+        self.opacityNormalVoter_SpinBox.setValue(20)
         self.opacityNormalVoter_SpinBox.setMaximum(100)
 
         self.sizeNormalVoter_SpinBox = QtWidgets.QSpinBox()
@@ -1880,11 +1944,18 @@ class VisualizeOptions(QtWidgets.QWidget):
         """""""""""
         Other Options
         """""""""""
+        self.buttonGroup_traceStatusQuo = QtWidgets.QButtonGroup()
+        self.radioButton_traceStatusQuo_Yes = QtWidgets.QRadioButton("Yes")
+        self.radioButton_traceStatusQuo_No = QtWidgets.QRadioButton("No")
+        self.radioButton_traceStatusQuo_Yes.setChecked(True)
+        self.buttonGroup_traceStatusQuo.addButton(self.radioButton_traceStatusQuo_Yes)
+        self.buttonGroup_traceStatusQuo.addButton(self.radioButton_traceStatusQuo_No)
+        
         self.checkBox_drawAnimation = QtWidgets.QCheckBox()
         self.checkBox_drawAnimation.setChecked(True)
 
-        self.checkBox_drawSingle = QtWidgets.QCheckBox()
-        self.checkBox_drawSingle.setChecked(True)
+#        self.checkBox_drawSingle = QtWidgets.QCheckBox()
+#        self.checkBox_drawSingle.setChecked(True)
 
         self.buttonGroup_traceTotalChange = QtWidgets.QButtonGroup()
         self.radioButton_traceTotalChange_Yes = QtWidgets.QRadioButton("Yes")
@@ -1979,8 +2050,19 @@ class VisualizeOptions(QtWidgets.QWidget):
         layout.addWidget(group_box_objects)
 
         """""""""""
-        Additional Plots
+        Additional Options + Plots
         """""""""""
+        group_box_trace_status_quo = QtWidgets.QGroupBox("Trace Status Quo")
+        
+        trace_status_quo_hbox = QtWidgets.QHBoxLayout()
+        [trace_status_quo_hbox.addWidget(widget) for widget in [self.radioButton_traceStatusQuo_Yes,
+         self.radioButton_traceStatusQuo_No]]
+        
+        group_box_trace_status_quo.setLayout(trace_status_quo_hbox)
+        
+        layout.addWidget(group_box_trace_status_quo)
+        """"""
+        
         group_box_plot_total_change = QtWidgets.QGroupBox("Plot Total Change")
 
         plot_total_change_hbox = QtWidgets.QHBoxLayout()
@@ -2098,9 +2180,44 @@ class VisualizeOptions(QtWidgets.QWidget):
         if not color.isValid():
             return
         button.setStyleSheet("background-color: {0}".format(color.name()))
+        return color
 
     def set_bg(self, button, color):
         button.setStyleSheet("background-color: {0}".format(color))
+        
+    def return_visualization_options(self):
+        values = {"agenda_setter_linewidth" : self.lineWidthAgendaSetter_SpinBox.value(),
+                  "agenda_setter_opacity"   : self.opacityAgendaSetter_SpinBox.value()/100,
+                  "agenda_setter_size"      : self.sizeAgendaSetter_SpinBox.value(),
+                  "agenda_setter_maincolor" : self.colorAgendaSetter,
+                  "agenda_setter_circlecolor" : self.colorAgendaSetterCircle,
+                  
+                  "veto_player_linewidth" : self.lineWidthVetoPlayer_SpinBox.value(),
+                  "veto_player_opacity"   : self.opacityVetoPlayer_SpinBox.value()/100,
+                  "veto_player_size"      : self.sizeVetoPlayer_SpinBox.value(),
+                  "veto_player_maincolor" : self.colorVetoPlayer,
+                  "veto_player_circlecolor" : self.colorVetoPlayerCircle,
+                  
+                  "normal_voter_linewidth" : self.lineWidthNormalVoter_SpinBox.value(),
+                  "normal_voter_opacity"   : self.opacityNormalVoter_SpinBox.value()/100,
+                  "normal_voter_size"      : self.sizeNormalVoter_SpinBox.value(),
+                  "normal_voter_maincolor" : self.colorNormalVoter,
+                  "normal_voter_circlecolor" : self.colorNormalVoterCircle,
+                  
+                  "trace_linewidth" : self.lineWidthTracer_SpinBox.value(),
+                  "trace_line_opacity" : self.opacityTracer_SpinBox.value()/100,
+                  "trace_line_maincolor" : self.colorTracer,
+                  
+                  "winset_linewidth" : self.lineWidthWinset_SpinBox.value(),
+                  "winset_opacity" : self.opacityWinset_SpinBox.value()/100,
+                  "winset_maincolor" : self.colorWinset,
+                  
+                  "trace_status_quo" : self.buttonGroup_traceStatusQuo.checkedButton().text(),
+                  "plot_total_change" : self.buttonGroup_traceTotalChange.checkedButton().text(),
+                  "plot_role_array" : self.buttonGroup_plotRoleArray.checkedButton().text()
+                  }
+        
+        return VisualizationOptions(**values)
 
 
 class VisualizeCanvas(FigureCanvas):
@@ -2108,12 +2225,20 @@ class VisualizeCanvas(FigureCanvas):
     Backend Canvas (see https://matplotlib.org/examples/user_interfaces/embedding_in_qt4.html)
     """
 
-    def __init__(self, parent=None, width=5.4, height=4, dpi=100, dimensions=2):
-        if dimensions == 1 or dimensions == 2:
-            self.fig = Figure(figsize=(width, height), dpi=dpi)
-
-            self.axes = self.fig.add_subplot(111, aspect="equal", position=[0.15, 0.15, 0.75, 0.75])
-
+    def __init__(self, parent=None, width=5.4, height=4, dpi=100):
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+#        self.gs1 = gridspec.GridSpec(1, 1)
+#        self.gs2 = gridspec.GridSpec(2, 1, height_ratios=[5, 3])
+#        self.gs3 = gridspec.GridSpec(3, 1, height_ratios=[5, 2, 1])
+        
+#        self.ax1 = self.fig.add_subplot(211, aspect="equal", position=[0.15, 0.15, 0.75, 0.75])     
+#        self.ax2 = self.fig.add_subplot(212) 
+#        self.ax1.set_aspect(0.1)
+#        
+        
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = self.fig.add_subplot(111, aspect="equal", position=[0.15, 0.15, 0.75, 0.75])              
+                
         self.fig.set_facecolor("none")
         self.fig.set_tight_layout(True)
         #        self.axes.set_axis_bgcolor("none")
@@ -2161,37 +2286,28 @@ class VisualizeDockWidget(QtWidgets.QWidget):
 
         self.setLayout(layout)
 
-    def adjust_axes(self, dimension):
+    def adjust_axes(self, dimension, total_change):
         if dimension == 1:
             self.canvas.fig.set_size_inches(7, 3)
-            self.canvas.updateGeometry()
+            self.canvas.draw()
 
-        if dimension == 2:
+        elif dimension == 2:
             self.canvas.fig.set_size_inches(7, 5)
-            print("set new canvas")
-
-
-# self.canvas.updateGeometry()
-
+            self.canvas.draw()
+         
 
 class LogDockWidget(QtWidgets.QTextEdit):
     def __init__(self, parent):
         super(LogDockWidget, self).__init__(parent)
-        self.setDisabled(True)
-        self.setup()
-        self.set_layout()
+        self.setReadOnly(True)
+        
+    def write(self, text):
+        self.insertPlainText(text)
+        self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
 
-    def setup(self):
-        #        self.log = QtWidgets.QTextEdit()
-        #        self.log.setDisabled(True)
+    def flush(self):
         pass
-
-    def set_layout(self):
-        #        layout = QtWidgets.QVBoxLayout()
-        #        layout.addWidget(self.log)
-        #        self.setLayout(layout)
-        pass
-
+    
 
 # noinspection PyUnresolvedReferences
 class ManifestoPyDockWidget(QtWidgets.QWidget):
@@ -2373,40 +2489,6 @@ class TableWidget(QtWidgets.QTableWidget):
             return
 
 
-class SimulationVariables:
-    def __init__(self, **kwargs):
-        """run options"""
-        self.votercount = kwargs["votercount"]
-        self.method = kwargs["method"]
-        self.runs = kwargs["runs"]
-        self.dimensions = kwargs["dimensions"]
-        self.save = kwargs["save"]
-        self.save_visualize = kwargs["save_visualize"]
-        self.visualize = kwargs["visualize"]
-        self.alter_preferences = kwargs["alter_preferences"]
-        self.alter_statusquo = kwargs["alter_statusquo"]
-
-        self.random_agenda_setter = kwargs["random_agenda_setter"]
-        self.random_veto_player = kwargs["random_veto_player"]
-        
-        self.trace = True # TODO a
-        self.directory = kwargs["directory"] # TODO b
-
-        self.statusquo_position = kwargs["statusquo_position"]
-        self.statusquo_drift = kwargs["statusquo_drift"]
-        self.voter_names = kwargs["voter_names"]
-        self.voter_roles = kwargs["voter_roles"]
-        self.voter_positions = kwargs["voter_positions"]
-
-        self.custom_role_array = kwargs["custom_role_array"] # TODO c
-
-        """adv run options"""
-        self.breaks = kwargs["breaks"]
-        self.density = kwargs["density"]
-        self.distance_type = kwargs["distance_type"]
-        self.sq_vibration_distribution = kwargs["sq_vibration_distribution"]
-        self.vibrate_sq = kwargs["vibrate_sq"]
-
 class EditableTabBar(QtWidgets.QTabBar):
     def __init__(self, parent):
         QtWidgets.QTabBar.__init__(self, parent)
@@ -2442,15 +2524,143 @@ class EditableTabBar(QtWidgets.QTabBar):
         if index >= 0:
             self._editor.hide()
             self.setTabText(index, self._editor.text())
+            
+            
+class SimulationVariables:
+    def __init__(self, **kwargs):
+        """run options"""
+        self.votercount = kwargs["votercount"]
+        self.method = kwargs["method"]
+        self.runs = kwargs["runs"]
+        self.dimensions = kwargs["dimensions"]
+        self.save = kwargs["save"]
+        self.save_visualize = kwargs["save_visualize"]
+        self.visualize = kwargs["visualize"]
+        self.alter_preferences = kwargs["alter_preferences"]
+        self.alter_statusquo = kwargs["alter_statusquo"]
+
+        self.random_agenda_setter = kwargs["random_agenda_setter"]
+        self.random_veto_player = kwargs["random_veto_player"]
+        
+        self.trace = True # TODO a
+        self.directory = kwargs["directory"] # TODO b
+
+        self.statusquo_position = kwargs["statusquo_position"]
+        self.statusquo_drift = kwargs["statusquo_drift"]
+        self.voter_names = kwargs["voter_names"]
+        self.voter_roles = kwargs["voter_roles"]
+        self.voter_positions = kwargs["voter_positions"]
+
+        self.custom_role_array = kwargs["custom_role_array"] # TODO c
+        self.custom_position_array = kwargs["custom_position_array"]
+
+        """adv run options"""
+        self.breaks = kwargs["breaks"]
+        self.density = kwargs["density"]
+        self.distance_type = kwargs["distance_type"]
+        self.sq_vibration_distribution = kwargs["sq_vibration_distribution"]
+        self.vibrate_sq = kwargs["vibrate_sq"]
 
 
+class GameTableOptions:
+    def __init__(self, from_load: bool = False, settings: object = None) -> object:
+        if from_load is False:
+            """Run"""
+            self.runs = 1
+            self.dimensions = 2
+            self.method = "grid"
+            self.save = "yes"
+            self.visualize = "yes"
+            self.alter_preferences = "no"
+            self.alter_statusquo = "history+drift"
+            self.distribution = "uniform"
+            self.save_visualize = "no"
+
+            """Advanced Run"""
+            self.breaks = 0.01
+            self.density = 1
+            self.distance_type = "euclidean"
+            self.sq_vibration_distribution = "uniform"
+            self.vibrate_sq = "no"
+
+        else:
+            """Run"""
+            self.runs = settings["runs"]
+            self.dimensions = settings["dimensions"]
+            self.method = settings["method"]
+            self.save = settings["save"]
+            self.visualize = settings["visualize"]
+            self.alter_preferences = settings["alter_preferences"]
+            self.alter_statusquo = settings["alter_statusquo"]
+            self.save_visualize = settings["save_visualize"]
+            
+            """Advanced Run"""
+            self.density = settings["density"]
+            self.breaks = settings["breaks"]
+            self.distance_type = settings["distance_type"]
+            self.sq_vibration_distribution = settings["sq_vibration_distribution"]
+            self.vibrate_sq = settings["vibrate_sq"]
+            
+
+class VisualizationOptions:
+    def __init__(self, **kwargs):
+        self.agenda_setter_linewidth = kwargs["agenda_setter_linewidth"]
+        self.agenda_setter_opacity = kwargs["agenda_setter_opacity"]
+        self.agenda_setter_size = kwargs["agenda_setter_size"]
+        self.agenda_setter_maincolor = kwargs["agenda_setter_maincolor"]
+        self.agenda_setter_circlecolor = kwargs["agenda_setter_circlecolor"]
+        
+        self.veto_player_linewidth = kwargs["veto_player_linewidth"]
+        self.veto_player_opacity = kwargs["veto_player_opacity"]
+        self.veto_player_size = kwargs["veto_player_size"]
+        self.veto_player_maincolor = kwargs["veto_player_maincolor"]
+        self.veto_player_circlecolor = kwargs["veto_player_circlecolor"]
+        
+        self.normal_voter_linewidth = kwargs["normal_voter_linewidth"]
+        self.normal_voter_opacity = kwargs["normal_voter_opacity"]
+        self.normal_voter_size = kwargs["normal_voter_size"]
+        self.normal_voter_maincolor = kwargs["normal_voter_maincolor"]
+        self.normal_voter_circlecolor = kwargs["normal_voter_circlecolor"]
+        
+        self.trace_linewidth = kwargs["trace_linewidth"]
+        self.trace_line_opacity = kwargs["trace_line_opacity"]
+        self.trace_line_maincolor = kwargs["trace_line_maincolor"]
+        
+        self.winset_linewidth = kwargs["winset_linewidth"]
+        self.winset_opacity = kwargs["winset_opacity"]
+        self.winset_maincolor = kwargs["winset_maincolor"]
+        
+        self.trace_status_quo = kwargs["trace_status_quo"]
+        
+        self.plot_total_change = kwargs["plot_total_change"]
+        
+        self.plot_role_array = kwargs["plot_role_array"]
+        
+class EmittingStream(QtCore.QObject):
+    text = QtCore.pyqtSignal(str)
+    def write(self, text):
+        self.text.emit(str(text))
+    def flush(self):
+        None
+        
+class OutLog:
+    def __init__(self):
+        self.textbox = QtWidgets.QTextEdit(self)
+        layout = QtWidgets.QHBoxLayout(self)
+        layout.addWidget(self.textbox)
+
+    def write(self, errmsg):
+        self.textbox.append(errmsg) 
+        
 def main():
     app = QtWidgets.QApplication(sys.argv)
     app.setWindowIcon(QtGui.QIcon("./assets/logo.png"))
     window = MainWindow()
+    sys.stdout = window.logWidget
+    sys.stderr = window.logWidget
     window.show()
     sys.exit(app.exec_())
 
-
 if __name__ == "__main__":
     main()
+

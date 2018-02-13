@@ -10,6 +10,7 @@ from pandas import DataFrame
 import numpy as np
 from itertools import combinations
 from math import floor, ceil
+from collections import namedtuple
 
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle, Polygon
@@ -18,33 +19,64 @@ import matplotlib.lines
 
 from shapely.geometry import Point, LinearRing
 from scipy.spatial import distance as dist
+from scipy.spatial import ConvexHull
 import copy
-
 
 # logging.basicConfig(filename = "vblog.log", level = logging.DEBUG)
 
 class Simulation:
-    def __init__(self, variables, parent=None):
+    def __init__(self, variables, visualization=None, parent=None):
+
+        self.custom_position_array_set = False
+        
         self.parent = parent
         #self.parent.logWidget.log.append("log3")
 
         self.variables = variables
-
-        self.variables.custom_role_array = False  # TODO implement this
+        
+        if visualization is None:
+            visualization_options = namedtuple("visualization_options",
+                                               "normal_voter_maincolor", "normal_voter_circlecolor", "normal_voter_size",
+                                               "normal_voter_opacity", "normal_voter_linewidth", "veto_player_maincolor",
+                                               "veto_player_circlecolor", "veto_player_size", "veto_player_opacity",
+                                               "veto_player_linewidth", "agenda_setter_maincolor", "agenda_setter_circlecolor",
+                                               "agenda_setter_size", "agenda_setter_opacity", "agenda_setter_linewidth",
+                                               "trace_linewidth", "trace_line_opacity", "trace_line_maincolor", "winset_linewidth",
+                                               "winset_opacity", "winset_maincolor", "trace_status_quo", "plot_total_change",
+                                               "plot_role_array")
+            
+            visualization = visualization_options(normal_voter_maincolor = "#7f7f7f", normal_voter_circlecolor = "#7f7f7f",
+                                                  normal_voter_size = 30, normal_voter_opacity = 0.2, normal_voter_linewidth = 0.5,
+                                                  veto_player_maincolor = "#d62728", veto_player_circlecolor = "#d62728",
+                                                  veto_player_size = 30, veto_player_opacity = 0.2, veto_player_linewidth = 0.5,
+                                                  agenda_setter_maincolor = "#1f77b4", agenda_setter_circlecolor = "#1f77b4",
+                                                  agenda_setter_size = 30, agenda_setter_opacity = 0.2, agenda_setter_linewidth = 0.5,
+                                                  trace_linewidth = 2, trace_line_opacity = 0.5, trace_line_maincolor = "#2ca02c",
+                                                  winset_linewidth = 0.5, winset_opacity = 0.7, winset_maincolor = "red",
+                                                  trace_status_quo = "Yes", plot_total_change = "No", plot_role_array = "No")
+        else:
+            self.visualization = visualization
+#        self.variables.custom_role_array = False  # TODO implement this
 
         """Initialize Voter Arrays"""
-        self.voter_position_array = np.zeros(
-            (self.variables.votercount, self.variables.runs, self.variables.dimensions))
+        if self.variables.custom_position_array is None:
+            print("CUSTOM ARRAY NONE")
+            self.voter_position_array = np.zeros(
+                (self.variables.votercount, self.variables.runs, self.variables.dimensions))
 
-        if not self.variables.alter_preferences == "drift":
-            for i, voter in enumerate(self.variables.voter_positions):
-                self.voter_position_array[i] = voter
+            if not self.variables.alter_preferences == "drift":
+                for i, voter in enumerate(self.variables.voter_positions):
+                    self.voter_position_array[i] = voter
+            else:
+                self.voter_position_array[:, 0, :] = self.variables.voter_positions
         else:
-            self.voter_position_array[:, 0, :] = self.variables.voter_positions
+            print("CUSTOM ARRAY NOT NONE")
+            self.voter_position_array = self.variables.custom_position_array
+            self.custom_position_array_set = True
 
-        self.voter_radius_array = np.zeros((self.variables.votercount, self.variables.runs, 1))
+        self.voter_radius_array = np.zeros((self.variables.runs, self.variables.votercount))
 
-        if self.variables.custom_role_array:
+        if self.variables.custom_role_array is not None:
             self.voter_role_array = np.array(self.variables.custom_role_array)
         else:
             if self.variables.random_veto_player and not self.variables.random_agenda_setter:
@@ -86,11 +118,13 @@ class Simulation:
             #            np.random.seed(self.seed)
             self.seeds = []
             self.start = []
-            self.stop = []
+            self.stop  = []
 
         """if shapely, initialize shapely objects for each voter"""
         if self.variables.method == "optimization":
             self.winset_patches = []
+            self.winset_centroids = []
+            self.winset_rads = []
 
             #            self.voterPoints = [Point(position) for position in self.Variables.voterPositions[:, 0, :]]
             #            self.voterCircles = [point.buffer(point.distance(self.statusQuo[0])) for point in self.voterPoints]
@@ -106,16 +140,16 @@ class Simulation:
             normal_player_index = np.where(self.voter_role_array[run, :] == 0)[0]
 
             """calculate run radius for all voters and update radius array"""
-            self.voter_radius_array[agenda_setter_index, run] = self.determine_distance(
+            self.voter_radius_array[run, agenda_setter_index] = self.determine_distance(
                 self.voter_position_array[agenda_setter_index, run],
                 self.statusquo[[run]], self.variables.distance_type)
 
             if veto_player_index.any():
-                self.voter_radius_array[veto_player_index, run, 0] = self.determine_distance(
+                self.voter_radius_array[run, veto_player_index] = self.determine_distance(
                     self.statusquo[[run]], self.voter_position_array[veto_player_index, run], self.variables.distance_type)
 
             if normal_player_index.any():
-                self.voter_radius_array[normal_player_index, run, 0] = self.determine_distance(
+                self.voter_radius_array[run, normal_player_index] = self.determine_distance(
                     self.statusquo[[run]], self.voter_position_array[normal_player_index, run], self.variables.distance_type)
 
             """check if agenda setter position == status quo position, in which case the outcome is predetermined"""
@@ -131,7 +165,6 @@ class Simulation:
 
             """determine possible coalitions given a selected majority rule -- coalitions necessarily include veto players and agenda setter"""
             possible_coalitions = self.determine_coalitions(agenda_setter_index, veto_player_index, normal_player_index)
-            print("possible coal", possible_coalitions)
             # TODO from coalition grid search to function
             possible_outcomes = []
 
@@ -139,10 +172,10 @@ class Simulation:
             if self.variables.method == "grid" or self.variables.method == "random grid":
                 """grid index to make grid a square around agenda setter radius"""
                 grid_index = [[self.voter_position_array[agenda_setter_index, run].item(dim) - self.voter_radius_array[
-                    agenda_setter_index, run].item(0) for
+                    run, agenda_setter_index].item(0) for
                                dim in range(self.variables.dimensions)],
                               [self.voter_position_array[agenda_setter_index, run].item(dim) +
-                               self.voter_radius_array[agenda_setter_index, run].item(0) for dim in
+                               self.voter_radius_array[run, agenda_setter_index].item(0) for dim in
                                range(self.variables.dimensions)]]
 
                 if self.variables.method == "grid":
@@ -177,8 +210,8 @@ class Simulation:
                 else:
                     self.outcomes[run] = possible_outcomes[0]
 
+            
             else:
-                print("optimize")
                 statusquo_point = Point(self.statusquo[run])
                 voter_points = [Point(position) for position in self.voter_position_array[:, run, :]]
                 voter_circles = [point.buffer(point.distance(statusquo_point)) for point in voter_points]
@@ -204,12 +237,18 @@ class Simulation:
 
                     winsets.append(intersection)
 
+                agenda_setter_overlap = False
                 closest_points = []
 
-                for winset in winsets:
-                    if winset.area != 0:
+                for i, winset in enumerate(winsets):
+                    if winset.area > 0:
+                        if winset.contains(voter_points[agenda_setter_index[0]]):
+                            closest_points.append(voter_points[agenda_setter_index[0]])
+                            min_index = i
+                            agenda_setter_overlap = True
+                            break
                         pol_ext = LinearRing(winset.exterior.coords)
-                        #                    d = polExt.project(voter_points[agendaSetterIndex])
+                        #d = polExt.project(voter_points[agendaSetterIndex])
                         d = pol_ext.project([voter_points[index] for index in agenda_setter_index][0])
                         p = pol_ext.interpolate(d)
                         closest_point = p.coords[0]
@@ -218,20 +257,27 @@ class Simulation:
                     else:
                         closest_points.append(self.statusquo[run].tolist())
 
-                closest_points_distances = [
-                    self.determine_distance(self.voter_position_array[agenda_setter_index, run], np.array([point])) for
-                    point
-                    in closest_points]
-                min_index = np.argmin(closest_points_distances)
-                self.outcomes[run] = closest_points[min_index]
+                if agenda_setter_overlap:
+                    self.outcomes[run] = closest_points[0]
+                                        
+                else:
+                    closest_points_distances = [
+                        self.determine_distance(self.voter_position_array[agenda_setter_index, run], np.array([point])) for
+                        point
+                        in closest_points]
+                    min_index = np.argmin(closest_points_distances)
+                    self.outcomes[run] = closest_points[min_index]
 
                 if self.variables.visualize:
-                    if np.all(self.outcomes[run] != self.statusquo[run]):
+                    if np.any(self.outcomes[run] != self.statusquo[run]): #any vs all ? 
                         self.winset_patches.append(
                             PatchCollection([Polygon(winsets[min_index].exterior)], facecolor="red", linewidth=.5,
                                             alpha=.7))
+
                     else:
                         self.winset_patches.append(None)
+                        self.winset_rads.append(None)
+                        self.winset_centroids.append(None)
 
             """determine distances travelled in run"""
             self.total_pyth_distance[run] = self.determine_distance(self.outcomes[[run]], self.statusquo[[run]])
@@ -246,12 +292,13 @@ class Simulation:
             if self.variables.runs > 1 and run != self.variables.runs - 1:
                 self.alter_statusquo(run)
                 # original passed on "self.outcomes[[run]])"
-                self.alter_player_preferences(run)
+                if not self.custom_position_array_set:
+                    self.alter_player_preferences(run)
 
                 #        if self.Variables.visualize:
                 #            self.visualizeResults()
 
-        if self.variables.save:
+        if self.variables.save.lower() == 'yes':
             self.save_results()
 
         if any([self.variables.random_veto_player, self.variables.random_agenda_setter]):
@@ -284,12 +331,8 @@ class Simulation:
         As such, it can also be used to determine the radius of a preference circle (by inputting
         a point and the status quo).
         """
-        #        if point1.ndim == 1:
-        #            point1 = point1[None, :]
-        #
-        #        if point2.ndim == 1:
-        #            point2 = point2[None, :]
-
+        if distance_type == "manhattan":
+            distance_type = "cityblock" #TODO fix this in namespace
         return dist.cdist(point1, point2, metric=distance_type)
 
     def grid_paint(self, start, stop, breaks, break_decimal):
@@ -352,7 +395,6 @@ class Simulation:
         """
         # if there are no points inside all preference circles, the outcome will be the status quo
         if not points_in_selection.any():
-            print("no points in inp")
             preferred_point = self.statusquo[run].tolist()
         else:
             # determine the distance of each eligible point to the agenda setter
@@ -410,7 +452,6 @@ class Simulation:
         Initialize Figure + Axis
         """
         """""""Initialize ax lim array"""""""
-        print("called vis init")
         if self.variables.dimensions == 1:
             self.visualize_limits = np.zeros((2, 2))
         else:
@@ -423,8 +464,9 @@ class Simulation:
             """""""""
             1D Figure
             """""""""
-            self.visualize_limits[0] = ((self.voter_position_array - self.voter_radius_array)[:, :, 0].min(),
-                                        (self.voter_position_array + self.voter_radius_array)[:, :, 0].max())
+            self.visualize_limits[0] = ((self.voter_position_array - self.voter_radius_array.
+                                 reshape((self.variables.votercount, self.variables.runs, 1))).min(),
+                                        (self.voter_position_array + self.voter_radius_array).max())
             self.visualize_limits[1] = (0, self.voter_radius_array.max())
 
             if save is True:
@@ -446,24 +488,27 @@ class Simulation:
             2D Figure
             """""""""
             for dim in range(self.variables.dimensions):
-                self.visualize_limits[dim] = ((self.voter_position_array - self.voter_radius_array).min(),
-                                              (self.voter_position_array + self.voter_radius_array).max())
+                self.visualize_limits[dim] = ((self.voter_position_array - self.voter_radius_array.
+                                     reshape((self.variables.votercount, self.variables.runs, 1))).min(),
+                                              (self.voter_position_array + self.voter_radius_array.
+                                               reshape((self.variables.votercount, self.variables.runs, 1))).max())
 
             if save is True:
-                self.variables.trace_total_change = False
-                if self.variables.trace_total_change is True:
+                if self.visualization.plot_total_change.lower() == "yes":
                     fig, (ax, ax1) = plt.subplots(2, 1, gridspec_kw={"height_ratios": [4, 1]})
                     fig.set_size_inches(10, 10)
                     fig.set_dpi(80)
-                    ax1.plot(range(self.variables.runs), self.total_pyth_distance, c="#1f77b4")
-                    ax1.scatter(range(self.variables.runs), self.total_pyth_distance, c="#d62728", s=40, clip_on=False)
-
+ 
                 else:
                     fig = plt.figure(figsize=(18.5, 10.5))
                     ax = fig.add_subplot(111, aspect="equal")
 
                 for run in range(self.variables.runs):
+                    print("Saving figure " + str(run+1) + "/" + str(self.variables.runs))
                     self.visualize_draw_on_axis(2, ax, run, self.visualize_limits)
+                    
+                    if self.visualization.plot_total_change.lower() == "yes":
+                        self.visualize_total_change(ax1, run)
 
                     filename = os.path.join(self.variables.directory, "run" + str(run) + ".png")
                     fig.savefig(filename, bbox_inches="tight")
@@ -496,6 +541,11 @@ class Simulation:
                 self.visualize_limits[dim] = ((self.voter_position_array - self.voter_radius_array)[:, :, dim].min(),
                                               (self.voter_position_array + self.voter_radius_array)[:, :, dim].max())
 
+    def visualize_total_change(self, ax, run):
+        ax.clear()
+        ax.plot(range(self.variables.runs), self.total_pyth_distance, c="#1f77b4")
+        ax.scatter(run, self.total_pyth_distance[run], c="#d62728", s=20, clip_on=False)
+                       
     def visualize_draw_on_axis(self, dim, ax, run, lims, fromUI=False):
         """
         Clear and then plot on given axis
@@ -523,40 +573,50 @@ class Simulation:
                 index = np.where(np.squeeze(np.isin(self.voter_role_array[run], 0)))[0]
 
                 ax.scatter(self.voter_position_array[index, run], [0 for i in index],
-                           s=70, c="black", label="Voters", clip_on=False)
+                           s=self.visualization.normal_voter_size, 
+                           c=self.visualization.normal_voter_maincolor, 
+                           label="Voters", clip_on=False)
 
                 norm_patches = [Circle((xx, 0), rr) for xx, rr in
-                                zip(self.voter_position_array[index, run], self.voter_radius_array[index, run])]
+                                zip(self.voter_position_array[index, run], self.voter_radius_array[run, index])]
 
-                norm_collection = PatchCollection(norm_patches, facecolors="grey", edgecolors="black", linewidths=0.5,
-                                                  alpha=0.2)
+                norm_collection = PatchCollection(norm_patches, 
+                                                  facecolors=self.visualization.normal_voter_circlecolor, 
+                                                  edgecolors="black", linewidths=0.5, 
+                                                  alpha=self.visualization.veto_player_opacity)
 
                 ax.add_collection(norm_collection)
                 norm_collection.set_clip_box(ax.bbox)
 
-            if 2 in self.voter_role_array[run]:
+            if 1 in self.voter_role_array[run]:
                 index = np.where(np.squeeze(np.isin(self.voter_role_array[run], 1)))[0]
 
-                ax.scatter(self.voter_position_array[index, run], [0 for _ in index], s=60, c="red",
+                ax.scatter(self.voter_position_array[index, run], [0 for _ in index], 
+                           s=self.visualization.veto_player_size, c=self.visualization.veto_player_maincolor,
                            label="Veto Players",
                            clip_on=False)
 
                 veto_patches = [Circle((xx, 0), rr) for xx, rr in
-                                zip(self.voter_position_array[index, run], self.voter_radius_array[index, run])]
+                                zip(self.voter_position_array[index, run], self.voter_radius_array[run, index])]
 
-                veto_collection = PatchCollection(veto_patches, facecolors="red", edgecolors="black", linewidths=0.5,
-                                                  alpha=0.2)
+                veto_collection = PatchCollection(veto_patches, 
+                                                  facecolors=self.visualization.veto_player_circlecolor, 
+                                                  edgecolors="black", linewidths=0.5,
+                                                  alpha=self.visualization.veto_player_opacity)
 
                 ax.add_collection(veto_collection)
                 veto_collection.set_clip_box(ax.bbox)
 
             index = np.where(np.squeeze(np.isin(self.voter_role_array[run], 2)))[0]
 
-            ax.scatter(self.voter_position_array[index, run], 0, s=60, c="lightblue", label="Agenda Setter",
+            ax.scatter(self.voter_position_array[index, run], 0, 
+                       s=self.visualization.agenda_setter_size, 
+                       c=self.visualization.agenda_setter_maincolor, label="Agenda Setter",
                        clip_on=False)
 
-            as_patch = Circle((self.voter_position_array[index, run], 0), self.voter_radius_array[index, run],
-                              facecolor="blue", edgecolor="black", linewidth=0.5, alpha=0.2)
+            as_patch = Circle((self.voter_position_array[index, run], 0), self.voter_radius_array[run, index],
+                              facecolor=self.visualization.agenda_setter_circlecolor, 
+                              edgecolor="black", linewidth=0.5, alpha=self.visualization.agenda_setter_opacity)
 
             ax.add_artist(as_patch)
             as_patch.set_clip_box(ax.bbox)
@@ -592,15 +652,18 @@ class Simulation:
                 """
                 index = np.where(np.squeeze(self.voter_role_array[run] == 0))[0]
 
-                ax.scatter(self.voter_position_array[index, run, 0], self.voter_position_array[index, run, 1], s=30,
-                           c="#7f7f7f", label="Voters")
+                ax.scatter(self.voter_position_array[index, run, 0], self.voter_position_array[index, run, 1], 
+                           s=self.visualization.normal_voter_size,
+                           c=self.visualization.normal_voter_maincolor, label="Voters", zorder=100)
 
                 norm_patches = [Circle((xx, yy), rr) for xx, yy, rr in zip(self.voter_position_array[index, run, 0],
                                                                            self.voter_position_array[index, run, 1],
-                                                                           self.voter_radius_array[index, run])]
+                                                                           self.voter_radius_array[run, index])]
 
-                norm_collection = PatchCollection(norm_patches, facecolors="#7f7f7f", edgecolors="black",
-                                                  linewidths=0.5, alpha=0.2)
+                norm_collection = PatchCollection(norm_patches, 
+                                                  facecolors=self.visualization.normal_voter_circlecolor, 
+                                                  edgecolors="black",
+                                                  linewidths=0.5, alpha=self.visualization.normal_voter_opacity)
 
                 ax.add_collection(norm_collection)
                 norm_collection.set_clip_box(ax.bbox)
@@ -612,15 +675,16 @@ class Simulation:
                 index = np.where(np.squeeze(self.voter_role_array[run] == 1))[0]
 
                 ax.scatter(self.voter_position_array[index, run, 0], self.voter_position_array[index, run, 1],
-                           s=30, c="#d62728", label="Veto Players")
+                           s=self.visualization.veto_player_size, 
+                           c=self.visualization.veto_player_maincolor, label="Veto Players", zorder=100)
 
                 veto_patches = [Circle((xx, yy), rr) for xx, yy, rr in zip(
                     self.voter_position_array[index, run, 0],
                     self.voter_position_array[index, run, 1],
-                    self.voter_radius_array[index, run])]
+                    self.voter_radius_array[run, index])]
 
-                veto_collection = PatchCollection(veto_patches, facecolors="#d62728",
-                                                  alpha=0.2, linewidths=0.5, edgecolors="black")
+                veto_collection = PatchCollection(veto_patches, facecolors=self.visualization.veto_player_circlecolor,
+                                                  alpha=self.visualization.veto_player_opacity, linewidths=0.5, edgecolors="black")
 
                 ax.add_collection(veto_collection)
                 veto_collection.set_clip_box(ax.bbox)
@@ -630,13 +694,15 @@ class Simulation:
             """
             index = np.where(np.squeeze(self.voter_role_array[run] == 2))[0]
             ax.scatter(self.voter_position_array[index, run, 0], self.voter_position_array[index, run, 1],
-                       s=30, c="#1f77b4", label="Agenda Setter")
+                       s=self.visualization.agenda_setter_size, 
+                       c=self.visualization.agenda_setter_maincolor, label="Agenda Setter", zorder=100)
 
             as_patch = Circle((
                 self.voter_position_array[index, run, 0],
                 self.voter_position_array[index, run, 1]),
-                self.voter_radius_array[index, run],
-                facecolor="#1f77b4", edgecolor="black", linewidth=0.5, alpha=0.2)
+                self.voter_radius_array[run, index],
+                facecolor=self.visualization.agenda_setter_circlecolor, 
+                edgecolor="black", linewidth=0.5, alpha=self.visualization.agenda_setter_opacity)
 
             ax.add_artist(as_patch)
             as_patch.set_clip_box(ax.bbox)
@@ -644,12 +710,11 @@ class Simulation:
             """
             plot status quo and outcome
             """
-            ax.scatter(self.statusquo[run, 0], self.statusquo[run, 1], s=35, c="#8c564b", label="Status Quo")
-            ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s=30, c="#ff7f0e", label="Outcome")
+            ax.scatter(self.statusquo[run, 0], self.statusquo[run, 1], s=35, c="#8c564b", label="Status Quo", zorder = 100)
+            ax.scatter(self.outcomes[run, 0], self.outcomes[run, 1], s=30, c="#ff7f0e", label="Outcome", zorder = 100)
 
             """add precise winset patch"""
             if self.variables.method == "optimization" and self.winset_patches[run] is not None:
-                print("add winset patch")
                 if not fromUI:
                     ax.add_collection(self.winset_patches[run])
                 else:
@@ -657,24 +722,43 @@ class Simulation:
                     ui_winset_patch.axes = None
                     ui_winset_patch.figure = None
                     ui_winset_patch.set_transform(ax.transData)
-                    ax.add_collection(ui_winset_patch)
-
+                    ax.add_collection(ui_winset_patch)     
+                    
+            """pareto hull"""
+            print("A")
+            test =  np.where(np.squeeze(self.voter_role_array[run] == 1))[0]
+            print("B")
+            print(test)
+            print(index, "C")
+            full_ind = np.concatenate((index, np.where(np.squeeze(self.voter_role_array[run] == 1))[0])) if 1 in self.voter_role_array[run] else index
+            considered = self.voter_position_array[full_ind, run]
+            
+            if len(considered) >= 3:
+                hull = ConvexHull(considered)
+                for s in hull.simplices:
+                    ax.plot(considered[s, 0], considered[s, 1], c="black")
+            elif len(considered) == 2:
+                ax.plot(considered[:, 0], considered[:, 1], c="black")
+            
             # trace status quo
-            if self.variables.trace is True:
+            if self.visualization.trace_status_quo == "Yes":
                 lines = [matplotlib.lines.Line2D([self.statusquo[run, 0], self.outcomes[run, 0]],
                                                  [self.statusquo[run, 1], self.outcomes[run, 1]],
-                                                 linewidth=2, color="#2ca02c", alpha=1)]
+                                                 linewidth=self.visualization.trace_linewidth,
+                                                     color=self.visualization.trace_line_maincolor, alpha=1)]
 
                 if run <= 4:
                     lines += [matplotlib.lines.Line2D([self.statusquo[run - i - 1, 0], self.statusquo[run - i, 0]],
                                                       [self.statusquo[run - i - 1, 1], self.statusquo[run - i, 1]],
-                                                      linewidth=2, color="#2ca02c", alpha=(0.8 - i * .2)) for i in
+                                                      linewidth=self.visualization.trace_linewidth,
+                                                      color=self.visualization.trace_line_maincolor, alpha=(0.8 - i * .2)) for i in
                               range(run)]
 
                 else:
                     lines += [matplotlib.lines.Line2D([self.statusquo[run - i - 1, 0], self.statusquo[run - i, 0]],
                                                       [self.statusquo[run - i - 1, 1], self.statusquo[run - i, 1]],
-                                                      linewidth=2, color="#2ca02c", alpha=(0.8 - i * .2)) for i in
+                                                      linewidth=self.visualization.trace_linewidth,
+                                                      color=self.visualization.trace_line_maincolor, alpha=(0.8 - i * .2)) for i in
                               range(5)]
 
                 [ax.add_line(line) for line in lines]
@@ -691,25 +775,28 @@ class Simulation:
         """
         Save results to csv
         """
+        payoffs = self.voter_radius_array - np.vstack((self.voter_radius_array[1:,:], 
+                                                       tuple(0 for _ in range(self.variables.votercount))))
         colnames = [y for x in [
             ["Voter " + str(i + 1) + "-" + voter + "-ROLE"] +
             ["Voter " + str(i + 1) + "-" + voter + "-DIM-" + str(dim + 1) for dim in range(self.variables.dimensions)] +
-            ["Voter " + str(i + 1) + "-" + voter + "-RADIUS"] for i, voter in enumerate(self.variables.voter_names)] for
+            ["Voter " + str(i + 1) + "-" + voter + "-RADIUS"] +
+            ["Voter " + str(i + 1) + "-" + voter + "-PAYOFF"] for i, voter in enumerate(self.variables.voter_names)] for
                     y in x] + \
                    ["Status Quo" + "-DIM " + str(dim + 1) for dim in range(self.variables.dimensions)] + \
                    ["Outcome" + "-DIM " + str(dim + 1) for dim in range(self.variables.dimensions)] + \
+                   ["Aggregate Payoff"] +\
                    ["Total Euclidean Distance", "Total Manhattan Distance"] + \
                    ["Distance" + "-dim " + str(dim + 1) for dim in range(self.variables.dimensions)] + \
                    ["Number Veto Players", "Number Normal Voters"]
 
-        # data
-
-        data = np.column_stack([self.voter_role_array] + \
-                               [np.column_stack((self.voter_position_array[i],
-                                                 self.voter_radius_array[i])) for
-                                i in range(self.variables.votercount)] + \
+        data = np.column_stack([y for x in [[self.voter_role_array[:, i, None],
+                                            self.voter_position_array[i],
+                                            self.voter_radius_array[:, i, None],
+                                            payoffs[:, i, None]] for i in range(self.variables.votercount)] for y in x] + \
                                [self.statusquo,
                                 self.outcomes,
+                                np.sum(payoffs, axis=1, keepdims=True),
                                 self.total_pyth_distance,
                                 self.total_manh_distance,
                                 self.dimension_distance,
